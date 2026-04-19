@@ -1,0 +1,18 @@
+{
+    "name": "NarrativeTool.App",
+    "rootNamespace": "NarrativeTool.App",
+    "references": [
+        "NarrativeTool.Core",
+        "NarrativeTool.Data",
+        "NarrativeTool.Canvas"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

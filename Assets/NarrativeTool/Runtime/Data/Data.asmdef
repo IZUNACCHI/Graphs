@@ -1,0 +1,16 @@
+{
+    "name": "NarrativeTool.Data",
+    "rootNamespace": "NarrativeTool.Data",
+    "references": [
+        "NarrativeTool.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

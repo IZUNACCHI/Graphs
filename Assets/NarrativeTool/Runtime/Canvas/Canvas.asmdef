@@ -1,0 +1,17 @@
+{
+    "name": "NarrativeTool.Canvas",
+    "rootNamespace": "NarrativeTool.Canvas",
+    "references": [
+        "NarrativeTool.Core",
+        "NarrativeTool.Data"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
