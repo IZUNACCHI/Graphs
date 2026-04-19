@@ -2,10 +2,6 @@ using System.Collections.Generic;
 
 namespace NarrativeTool.Data
 {
-    /// <summary>
-    /// One graph within a project. Holds the nodes and edges. A project can have
-    /// many graphs (subgraphs, separate dialogue trees, etc.).
-    /// </summary>
     public sealed class GraphDocument
     {
         public string Id { get; }

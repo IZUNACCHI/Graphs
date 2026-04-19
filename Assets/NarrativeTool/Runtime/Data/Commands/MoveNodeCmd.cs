@@ -4,9 +4,8 @@ using UnityEngine;
 namespace NarrativeTool.Data.Commands
 {
     /// <summary>
-    /// Moves a node to a new position. Mergeable: a second MoveNodeCmd on the
-    /// same node swallows the first, so a drag produces one undo entry instead
-    /// of dozens.
+    /// Move a node to a new position. Mergeable with a previous MoveNodeCmd
+    /// on the same node — a drag produces one undo entry.
     /// </summary>
     public sealed class MoveNodeCmd : ICommand
     {
@@ -15,7 +14,7 @@ namespace NarrativeTool.Data.Commands
         private readonly GraphDocument graph;
         private readonly EventBus bus;
         private readonly string nodeId;
-        private Vector2 from;  // mutable so merge can extend the range
+        private Vector2 from;
         private Vector2 to;
 
         public MoveNodeCmd(GraphDocument graph, EventBus bus, string nodeId, Vector2 from, Vector2 to)
@@ -46,7 +45,6 @@ namespace NarrativeTool.Data.Commands
                 prev.nodeId == nodeId &&
                 ReferenceEquals(prev.graph, graph))
             {
-                // Keep the earliest origin so undo goes all the way back
                 from = prev.from;
                 return true;
             }

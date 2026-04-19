@@ -1,4 +1,3 @@
-// ===== File: Assets/NarrativeTool/Runtime/Data/Node.cs =====
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,11 +6,6 @@ namespace NarrativeTool.Data
     /// <summary>
     /// Abstract base for every node type. Concrete subclasses add their own
     /// fields (TextNode carries a string, Start/End carry nothing extra).
-    ///
-    /// Why abstract and not a bag-of-properties dictionary: compile-time safety,
-    /// and it lines up with the NodeTypeRegistry/Descriptor design from the
-    /// original spec. Polymorphic JSON round-tripping will be handled by
-    /// Newtonsoft in Artifact 3.
     /// </summary>
     public abstract class Node
     {

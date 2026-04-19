@@ -1,5 +1,4 @@
-﻿// ===== File: Assets/NarrativeTool/Runtime/App/PlaygroundBootstrap.cs =====
-using NarrativeTool.Canvas;
+﻿using NarrativeTool.Canvas;
 using NarrativeTool.Core;
 using NarrativeTool.Data;
 using UnityEngine;
@@ -8,11 +7,9 @@ using UnityEngine.UIElements;
 namespace NarrativeTool.App
 {
     /// <summary>
-    /// Attach to a GameObject with a UIDocument. Builds a tiny
-    /// Start → TextNode → End graph for play-testing the canvas.
-    ///
-    /// Ctrl+Z / Ctrl+Y go through our CommandSystem everywhere (including
-    /// when a text field is focused) for consistency.
+    /// Playground scene bootstrap. Creates app-global services (EventBus,
+    /// ContextMenuController), per-project SessionState, and binds the
+    /// canvas to the demo graph.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class PlaygroundBootstrap : MonoBehaviour
@@ -20,14 +17,19 @@ namespace NarrativeTool.App
         [SerializeField] private StyleSheet theme;
 
         private GraphCanvas canvas;
-        private CommandSystem commands;
+        private SessionState session;
+        private ContextMenuController contextMenu;
 
         private void Awake()
         {
             Services.Clear();
-            Services.Register(new EventBus());
-            Services.Register(new CommandSystem());
-            commands = Services.Get<CommandSystem>();
+
+            var bus = new EventBus();
+            Services.Register(bus);
+            Services.Register(new ContextMenuController());
+
+            session = new SessionState(bus);
+            contextMenu = Services.Get<ContextMenuController>();
         }
 
         private void Start()
@@ -40,6 +42,10 @@ namespace NarrativeTool.App
             if (sheet != null) root.styleSheets.Add(sheet);
             else Debug.LogWarning("[Playground] Theme.uss not found. Drop it into a Resources folder or assign it on PlaygroundBootstrap.");
 
+            contextMenu.SetRootHost(root);
+            contextMenu.RegisterProvider(new CanvasContextMenuProvider());
+            contextMenu.RegisterProvider(new NodeContextMenuProvider());
+
             var project = BuildTestProject();
             var graph = project.Graphs[0];
 
@@ -48,23 +54,10 @@ namespace NarrativeTool.App
             canvas.style.flexGrow = 1;
             root.Add(canvas);
 
-            canvas.Bind(graph, Services.Get<EventBus>(), commands);
+            canvas.Bind(graph, session, contextMenu);
             canvas.Focus();
 
-            // Capture Ctrl+Z/Y at the root, before any inner focus target sees it.
-            root.RegisterCallback<KeyDownEvent>(OnKey, TrickleDown.TrickleDown);
-
-            Debug.Log("[Playground] Ready. Drag by the node header. Middle-mouse pan, wheel zoom, Ctrl+Z/Y undo/redo.");
-        }
-
-        private void OnKey(KeyDownEvent e)
-        {
-            bool ctrl = e.ctrlKey || e.commandKey;
-            if (!ctrl) return;
-
-            if (e.keyCode == KeyCode.Z && !e.shiftKey) { commands.Undo(); e.StopPropagation(); }
-            else if (e.keyCode == KeyCode.Z && e.ctrlKey || (e.keyCode == KeyCode.Z && e.shiftKey))
-            { commands.Redo(); e.StopPropagation();; }
+            Debug.Log("[Playground] Ready. Right-click canvas to add a node. Click to select (undoable). Delete / Backspace removes selection. Ctrl+Z / Ctrl+Shift+Z undo/redo.");
         }
 
         private static ProjectModel BuildTestProject()

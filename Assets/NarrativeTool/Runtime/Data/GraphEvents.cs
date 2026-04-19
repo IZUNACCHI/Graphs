@@ -1,19 +1,12 @@
-// ===== File: Assets/NarrativeTool/Runtime/Data/GraphEvents.cs =====
 using UnityEngine;
 
 namespace NarrativeTool.Data
 {
-    /// <summary>
-    /// Event record types published by commands. Views subscribe to these on
-    /// the EventBus and update themselves.
-    /// </summary>
-
     public readonly struct NodeAddedEvent
     {
         public readonly string GraphId;
         public readonly string NodeId;
-        public NodeAddedEvent(string graphId, string nodeId)
-        { GraphId = graphId; NodeId = nodeId; }
+        public NodeAddedEvent(string graphId, string nodeId) { GraphId = graphId; NodeId = nodeId; }
         public override string ToString() => $"{{ Graph={GraphId}, Node={NodeId} }}";
     }
 
@@ -21,8 +14,7 @@ namespace NarrativeTool.Data
     {
         public readonly string GraphId;
         public readonly string NodeId;
-        public NodeRemovedEvent(string graphId, string nodeId)
-        { GraphId = graphId; NodeId = nodeId; }
+        public NodeRemovedEvent(string graphId, string nodeId) { GraphId = graphId; NodeId = nodeId; }
         public override string ToString() => $"{{ Graph={GraphId}, Node={NodeId} }}";
     }
 
@@ -52,8 +44,7 @@ namespace NarrativeTool.Data
     {
         public readonly string GraphId;
         public readonly string EdgeId;
-        public EdgeAddedEvent(string graphId, string edgeId)
-        { GraphId = graphId; EdgeId = edgeId; }
+        public EdgeAddedEvent(string graphId, string edgeId) { GraphId = graphId; EdgeId = edgeId; }
         public override string ToString() => $"{{ Graph={GraphId}, Edge={EdgeId} }}";
     }
 
@@ -61,8 +52,7 @@ namespace NarrativeTool.Data
     {
         public readonly string GraphId;
         public readonly string EdgeId;
-        public EdgeRemovedEvent(string graphId, string edgeId)
-        { GraphId = graphId; EdgeId = edgeId; }
+        public EdgeRemovedEvent(string graphId, string edgeId) { GraphId = graphId; EdgeId = edgeId; }
         public override string ToString() => $"{{ Graph={GraphId}, Edge={EdgeId} }}";
     }
 }

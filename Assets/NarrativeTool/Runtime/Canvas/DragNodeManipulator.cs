@@ -1,4 +1,3 @@
-// ===== File: Assets/NarrativeTool/Runtime/Canvas/DragNodeManipulator.cs =====
 using NarrativeTool.Core;
 using NarrativeTool.Data;
 using NarrativeTool.Data.Commands;
@@ -8,21 +7,22 @@ using UnityEngine.UIElements;
 namespace NarrativeTool.Canvas
 {
     /// <summary>
-    /// Drags a NodeView by its header. While dragging, only the view's visual
-    /// position changes — no model mutation, no commands, no event bus
-    /// traffic. On pointer-up, a single MoveNodeCmd records the full delta
-    /// as one undo entry.
-    ///
-    /// Attach to the node's header element (not the whole node), so clicks on
-    /// ports, body, or a text field don't start a drag.
+    /// Drag a NodeView by its header. 4-pixel distance threshold gates
+    /// drag start so bare clicks don't become drags. Shift held at
+    /// pointer-down suppresses drag entirely (selection-only gesture).
     /// </summary>
     public sealed class DragNodeManipulator : Manipulator
     {
+        private const float DragThresholdPixels = 4f;
+
         private readonly NodeView nodeView;
 
-        private bool dragging;
-        private Vector2 dragStartMouseWorld;   // world-space pointer pos at drag start
-        private Vector2 dragStartNodePosition; // node world position at drag start
+        private enum Phase { Idle, Armed, Dragging }
+        private Phase phase = Phase.Idle;
+
+        private Vector2 armedPointerScreenStart;
+        private Vector2 dragStartMouseWorld;
+        private Vector2 dragStartNodePosition;
 
         public DragNodeManipulator(NodeView nv) { nodeView = nv; }
 
@@ -42,25 +42,33 @@ namespace NarrativeTool.Canvas
 
         private void OnDown(PointerDownEvent e)
         {
-            if (e.button != 0) return; // left mouse only
+            if (e.button != 0) return;
+            if (e.shiftKey) return;
 
-            dragging = true;
-            dragStartMouseWorld = CanvasLocalToWorld(e);
-            dragStartNodePosition = nodeView.Node.Position;
+            phase = Phase.Armed;
+            armedPointerScreenStart = e.position;
             target.CapturePointer(e.pointerId);
-            e.StopPropagation();
         }
 
         private void OnMove(PointerMoveEvent e)
         {
-            if (!dragging) return;
+            if (phase == Phase.Idle) return;
             if (!target.HasPointerCapture(e.pointerId)) return;
+
+            if (phase == Phase.Armed)
+            {
+                var screenDelta = (Vector2)e.position - armedPointerScreenStart;
+                if (screenDelta.sqrMagnitude < DragThresholdPixels * DragThresholdPixels) return;
+
+                phase = Phase.Dragging;
+                dragStartMouseWorld = CanvasLocalToWorld(e);
+                dragStartNodePosition = nodeView.Node.Position;
+            }
 
             var currentWorld = CanvasLocalToWorld(e);
             var delta = currentWorld - dragStartMouseWorld;
             var newVisualPos = dragStartNodePosition + delta;
 
-            // Visual-only update — model untouched until pointer up.
             nodeView.SetVisualPosition(newVisualPos);
             nodeView.Canvas.EdgeLayer.MarkDirtyRepaint();
             e.StopPropagation();
@@ -68,16 +76,18 @@ namespace NarrativeTool.Canvas
 
         private void OnUp(PointerUpEvent e)
         {
-            if (!dragging) return;
+            if (phase == Phase.Idle) return;
             if (e.button != 0) return;
             if (target.HasPointerCapture(e.pointerId)) target.ReleasePointer(e.pointerId);
-            dragging = false;
+
+            bool wasDragging = phase == Phase.Dragging;
+            phase = Phase.Idle;
+
+            if (!wasDragging) return;
 
             var finalPos = nodeView.GetVisualPosition();
             if (finalPos == dragStartNodePosition)
             {
-                // No movement — nothing to record. Sync view just in case of
-                // float jitter.
                 nodeView.SyncPositionFromData();
                 nodeView.Canvas.EdgeLayer.MarkDirtyRepaint();
                 e.StopPropagation();
@@ -91,16 +101,9 @@ namespace NarrativeTool.Canvas
             e.StopPropagation();
         }
 
-        /// <summary>
-        /// Convert a pointer event's position into world (content-layer) coords.
-        /// e.position is panel-local; when the canvas fills the panel that also
-        /// equals canvas-local. If the canvas were offset inside the panel we'd
-        /// need WorldToLocal here, but the current layout makes that unnecessary.
-        /// </summary>
         private Vector2 CanvasLocalToWorld(IPointerEvent e)
         {
             var canvasLocal = (Vector2)e.position;
-            // If the canvas is not at the panel origin, convert:
             var canvas = nodeView.Canvas;
             var panelOrigin = canvas.parent != null
                 ? canvas.parent.LocalToWorld(canvas.layout.position)

@@ -1,16 +1,12 @@
-﻿// ===== File: Assets/NarrativeTool/Runtime/Canvas/PanZoomManipulator.cs =====
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace NarrativeTool.Canvas
 {
     /// <summary>
-    /// Middle-mouse-drag to pan, scroll wheel to zoom around the cursor.
-    /// Writes the transform to <see cref="GraphCanvas.ContentLayer"/>.
-    ///
-    /// Math ported from the working CameraController: translate is applied
-    /// pre-scale, so screen-space pan delta is divided by zoom; zoom-around-
-    /// cursor keeps the world point under the cursor fixed.
+    /// Middle-mouse pan, wheel zoom. Writes transform to
+    /// canvas.ContentLayer. Pan delta is in screen space (no /zoom);
+    /// transformOrigin (0,0) keeps scale-then-translate math simple.
     /// </summary>
     public sealed class PanZoomManipulator : Manipulator
     {
@@ -20,8 +16,8 @@ namespace NarrativeTool.Canvas
         private float zoom = 1f;
 
         private bool panning;
-        private Vector2 panStartCanvas;   // pointer position in canvas-local space
-        private Vector2 panStartOffset;   // panOffset when pan began
+        private Vector2 panStartCanvas;
+        private Vector2 panStartOffset;
 
         private const float MIN_ZOOM = 0.2f;
         private const float MAX_ZOOM = 3f;
@@ -30,10 +26,7 @@ namespace NarrativeTool.Canvas
         public Vector2 PanOffset => panOffset;
         public float Zoom => zoom;
 
-        public PanZoomManipulator(GraphCanvas canvas)
-        {
-            this.canvas = canvas;
-        }
+        public PanZoomManipulator(GraphCanvas canvas) { this.canvas = canvas; }
 
         protected override void RegisterCallbacksOnTarget()
         {
@@ -53,7 +46,7 @@ namespace NarrativeTool.Canvas
 
         private void OnPointerDown(PointerDownEvent e)
         {
-            if (e.button != 2) return; // middle mouse
+            if (e.button != 2) return;
             panning = true;
             panStartCanvas = e.localPosition;
             panStartOffset = panOffset;
@@ -67,7 +60,7 @@ namespace NarrativeTool.Canvas
             if (!target.HasPointerCapture(e.pointerId)) return;
 
             var delta = (Vector2)e.localPosition - panStartCanvas;
-            panOffset = panStartOffset + delta;     // <-- changed: no "/ zoom"
+            panOffset = panStartOffset + delta;
             ApplyTransform();
             e.StopPropagation();
         }
@@ -87,11 +80,6 @@ namespace NarrativeTool.Canvas
             var newZoom = Mathf.Clamp(zoom - e.delta.y * WHEEL_SENSITIVITY, MIN_ZOOM, MAX_ZOOM);
             if (Mathf.Approximately(newZoom, oldZoom)) { e.StopPropagation(); return; }
 
-            // Keep the world point under the cursor fixed. Derivation:
-            //   worldAtCursor = (cursor - panOffset) / oldZoom
-            // After zoom we want (cursor - newPanOffset) / newZoom == worldAtCursor
-            //   newPanOffset = cursor - worldAtCursor * newZoom
-            //                = cursor - (cursor - panOffset) * (newZoom / oldZoom)
             var cursor = (Vector2)e.localMousePosition;
             zoom = newZoom;
             panOffset = cursor - (cursor - panOffset) * (zoom / oldZoom);
@@ -101,9 +89,6 @@ namespace NarrativeTool.Canvas
 
         private void ApplyTransform()
         {
-            // Translate with explicit float args → implicit Length(pixels). Same
-            // approach as the working reference. Avoid the 2-arg constructor —
-            // it defaults to percent units and causes drift.
             canvas.ContentLayer.style.translate = new Translate(panOffset.x, panOffset.y, 0f);
             canvas.ContentLayer.style.scale = new Scale(new Vector3(zoom, zoom, 1f));
             canvas.EdgeLayer.MarkDirtyRepaint();

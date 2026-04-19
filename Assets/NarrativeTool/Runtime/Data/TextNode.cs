@@ -1,21 +1,16 @@
-// ===== File: Assets/NarrativeTool/Runtime/Data/TextNode.cs =====
 using UnityEngine;
 
 namespace NarrativeTool.Data
 {
     /// <summary>
-    /// A flow node that carries a string payload. Stand-in for the eventual
-    /// dialogue node. One flow input, one flow output, and a Text field.
+    /// A flow node that carries a string payload. One flow input, one flow
+    /// output. Mutate Text via SetNodeTextCmd so undo works.
     /// </summary>
     public sealed class TextNode : Node
     {
         public const string InputPortId = "in";
         public const string OutputPortId = "out";
 
-        /// <summary>
-        /// The editable text displayed on the node. Mutate via SetNodeTextCmd
-        /// so undo/redo works correctly.
-        /// </summary>
         public string Text { get; set; } = "";
 
         public TextNode(string id, string title, Vector2 position, string text = "")

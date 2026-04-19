@@ -5,9 +5,9 @@ using UnityEngine;
 namespace NarrativeTool.Core
 {
     /// <summary>
-    /// Central undo/redo manager. Executes ICommands, maintains the undo/redo
-    /// stacks, supports merging of consecutive commands, and supports transactions
-    /// for multi-step operations (which appear as a single entry on the stack).
+    /// Undo/redo manager. Executes ICommands, maintains stacks, supports
+    /// merging of consecutive commands, and supports transactions (grouped
+    /// commands that appear as a single undo entry).
     /// </summary>
     public sealed class CommandSystem
     {
@@ -20,17 +20,6 @@ namespace NarrativeTool.Core
         public bool CanUndo => undo.Count > 0;
         public bool CanRedo => redo.Count > 0;
 
-        /// <summary>
-        /// Execute a command, apply it, and push it on the undo stack. Clears
-        /// the redo stack (standard undo/redo semantics).
-        ///
-        /// If a transaction is open, the command is added to the transaction
-        /// instead of being pushed individually.
-        ///
-        /// If the top of the undo stack accepts a merge with this command,
-        /// the new command swallows the old one and only the merged result
-        /// remains on the stack.
-        /// </summary>
         public void Execute(ICommand cmd)
         {
             if (cmd == null) throw new ArgumentNullException(nameof(cmd));
@@ -44,13 +33,12 @@ namespace NarrativeTool.Core
                 return;
             }
 
-            // Try to merge with top of stack
             if (undo.Count > 0)
             {
                 var top = undo.Peek();
                 if (cmd.TryMerge(top))
                 {
-                    undo.Pop(); // discard the one that got merged in
+                    undo.Pop();
                     undo.Push(cmd);
                     redo.Clear();
                     Debug.Log($"[Cmd] {cmd.Name} merged — stack size: {undo.Count}");
@@ -63,9 +51,6 @@ namespace NarrativeTool.Core
             Debug.Log($"[Cmd] {cmd.Name} executed — stack size: {undo.Count}");
         }
 
-        /// <summary>
-        /// Undo the top command. No-op if stack is empty.
-        /// </summary>
         public void Undo()
         {
             if (undo.Count == 0) { Debug.Log("[Cmd] Undo — nothing to undo"); return; }
@@ -75,9 +60,6 @@ namespace NarrativeTool.Core
             Debug.Log($"[Cmd] Undo {cmd.Name}");
         }
 
-        /// <summary>
-        /// Redo the most recently undone command. No-op if redo stack is empty.
-        /// </summary>
         public void Redo()
         {
             if (redo.Count == 0) { Debug.Log("[Cmd] Redo — nothing to redo"); return; }
@@ -87,14 +69,6 @@ namespace NarrativeTool.Core
             Debug.Log($"[Cmd] Redo {cmd.Name}");
         }
 
-        /// <summary>
-        /// Begin a transaction. Every Execute until the returned handle is
-        /// disposed is grouped into one CompositeCommand, which appears as a
-        /// single entry on the undo stack.
-        ///
-        /// Use with `using`:
-        ///   using (Commands.BeginTransaction("Delete selection")) { ... }
-        /// </summary>
         public IDisposable BeginTransaction(string name)
         {
             if (activeTransaction != null)
@@ -119,15 +93,12 @@ namespace NarrativeTool.Core
             Debug.Log($"[Cmd] Transaction '{tx.Name}' committed ({tx.Count} ops) — stack size: {undo.Count}");
         }
 
-        /// <summary>Clear both stacks. Call after loading a new project.</summary>
         public void Clear()
         {
             undo.Clear();
             redo.Clear();
             Debug.Log("[Cmd] Stacks cleared");
         }
-
-        // -- internal --
 
         internal sealed class Transaction : IDisposable
         {
@@ -163,7 +134,7 @@ namespace NarrativeTool.Core
             }
             public void Do() { for (int i = 0; i < ops.Count; i++) ops[i].Do(); }
             public void Undo() { for (int i = ops.Count - 1; i >= 0; i--) ops[i].Undo(); }
-            public bool TryMerge(ICommand previous) => false; // composites never merge
+            public bool TryMerge(ICommand previous) => false;
         }
     }
 }

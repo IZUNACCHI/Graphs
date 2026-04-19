@@ -1,45 +1,34 @@
-﻿/* =========================================================
-   Narrative Tool — Unreal Blueprints-inspired theme
-   v1b: adds text-field styling on Data-category nodes.
-   ========================================================= */
+﻿.nt-root   { background-color: #1a1a1a; }
+.nt-canvas { background-color: #1a1a1a; }
 
-/* Root canvas */
-.nt-root {
-    background-color: #1a1a1a;
-}
-
-.nt-canvas {
-    background-color: #1a1a1a;
-}
-
-/* -------------------- NODE -------------------- */
+/* Node */
 .nt-node {
     background-color: #2d2d2d;
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-    border-left-color: #404040;
-    border-right-color: #404040;
-    border-top-color: #404040;
-    border-bottom-color: #404040;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #404040; border-right-color: #404040;
+    border-top-color: #404040;  border-bottom-color: #404040;
+    border-top-left-radius: 6px;    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px; border-bottom-right-radius: 6px;
     padding-bottom: 6px;
     min-width: 180px;
 }
 
-/* Header strip */
+.nt-node--selected {
+    border-left-color: #ffffff;
+    border-right-color: #ffffff;
+    border-top-color: #ffffff;
+    border-bottom-color: #ffffff;
+    border-left-width: 2px;  border-right-width: 2px;
+    border-top-width: 2px;   border-bottom-width: 2px;
+}
+
 .nt-node-header {
     height: 24px;
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 10px; padding-right: 10px;
     flex-direction: row;
     align-items: center;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
+    border-top-left-radius: 5px; border-top-right-radius: 5px;
     margin-bottom: 4px;
 }
 
@@ -50,42 +39,31 @@
     -unity-text-align: middle-left;
 }
 
-.nt-header-event { background-color: #8b2020; }  /* Start — red */
-.nt-header-flow  { background-color: #3a3a3a; }  /* End — grey */
-.nt-header-data  { background-color: #2d6aa0; }  /* TextNode — blue */
+.nt-header-event { background-color: #8b2020; }
+.nt-header-flow  { background-color: #3a3a3a; }
+.nt-header-data  { background-color: #2d6aa0; }
 
-/* Body: two columns */
 .nt-node-body {
     flex-direction: row;
     justify-content: space-between;
-    padding-left: 2px;
-    padding-right: 2px;
+    padding-left: 2px; padding-right: 2px;
 }
 
-.nt-node-column {
-    flex-direction: column;
-    min-width: 48px;
-}
-
+.nt-node-column  { flex-direction: column; min-width: 48px; }
 .nt-node-inputs  { align-items: flex-start; }
 .nt-node-outputs { align-items: flex-end;   }
 
-/* Extras row — node-type-specific widgets (text field, etc.) */
 .nt-node-extras {
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 4px;
-    padding-bottom: 2px;
+    padding-left: 8px; padding-right: 8px;
+    padding-top: 4px;  padding-bottom: 2px;
 }
 
-/* -------------------- PORT -------------------- */
+/* Port */
 .nt-port {
     flex-direction: row;
     align-items: center;
-    padding-top: 2px;
-    padding-bottom: 2px;
-    padding-left: 2px;
-    padding-right: 2px;
+    padding-top: 2px; padding-bottom: 2px;
+    padding-left: 2px; padding-right: 2px;
     height: 18px;
 }
 
@@ -95,8 +73,7 @@
 .nt-port-label {
     color: #b8b8b8;
     font-size: 11px;
-    margin-left: 5px;
-    margin-right: 5px;
+    margin-left: 5px; margin-right: 5px;
     -unity-text-align: middle-left;
 }
 
@@ -104,48 +81,69 @@
 .nt-port-output > .nt-port-label { -unity-text-align: middle-right; }
 
 .nt-port-glyph {
-    width: 11px;
-    height: 11px;
+    width: 11px; height: 11px;
     background-color: #cfcfcf;
-    border-top-left-radius: 2px;
-    border-top-right-radius: 2px;
-    border-bottom-left-radius: 2px;
-    border-bottom-right-radius: 2px;
+    border-top-left-radius: 2px;    border-top-right-radius: 2px;
+    border-bottom-left-radius: 2px; border-bottom-right-radius: 2px;
 }
 
 .nt-port-flow { background-color: #d8d8d8; }
 
-/* -------------------- TEXT FIELD INSIDE A NODE -------------------- */
-.nt-node-textfield {
-    margin-top: 2px;
-    margin-bottom: 2px;
-}
+/* Text field */
+.nt-node-textfield { margin-top: 2px; margin-bottom: 2px; }
 
 .nt-node-textfield > .unity-text-field__input {
     background-color: #1d1d1d;
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-    border-left-color: #3a3a3a;
-    border-right-color: #3a3a3a;
-    border-top-color: #3a3a3a;
-    border-bottom-color: #3a3a3a;
-    border-top-left-radius: 3px;
-    border-top-right-radius: 3px;
-    border-bottom-left-radius: 3px;
-    border-bottom-right-radius: 3px;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
     color: #e0e0e0;
-    padding-left: 6px;
-    padding-right: 6px;
-    padding-top: 2px;
-    padding-bottom: 2px;
+    padding-left: 6px; padding-right: 6px;
+    padding-top: 2px;  padding-bottom: 2px;
     font-size: 11px;
 }
 
 .nt-node-textfield > .unity-text-field__input:focus {
-    border-left-color: #5a8ac8;
-    border-right-color: #5a8ac8;
-    border-top-color: #5a8ac8;
-    border-bottom-color: #5a8ac8;
+    border-left-color: #5a8ac8; border-right-color: #5a8ac8;
+    border-top-color: #5a8ac8;  border-bottom-color: #5a8ac8;
+}
+
+/* Context menu */
+.nt-ctxmenu {
+    background-color: #252525;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 4px;    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+    padding-top: 4px;    padding-bottom: 4px;
+    padding-left: 2px;   padding-right: 2px;
+    min-width: 160px;
+}
+
+.nt-ctxmenu-item {
+    color: #dcdcdc;
+    font-size: 12px;
+    padding-top: 4px;    padding-bottom: 4px;
+    padding-left: 10px;  padding-right: 10px;
+    -unity-text-align: middle-left;
+}
+
+.nt-ctxmenu-item:hover {
+    background-color: #2d6aa0;
+    color: #ffffff;
+}
+
+.nt-ctxmenu-item--disabled { color: #606060; }
+.nt-ctxmenu-item--disabled:hover { background-color: transparent; color: #606060; }
+
+.nt-ctxmenu-separator {
+    height: 1px;
+    background-color: #3a3a3a;
+    margin-top: 3px; margin-bottom: 3px;
+    margin-left: 4px; margin-right: 4px;
 }
