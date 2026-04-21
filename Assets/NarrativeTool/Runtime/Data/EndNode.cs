@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace NarrativeTool.Data
 {
@@ -9,7 +9,7 @@ namespace NarrativeTool.Data
         public EndNode(string id, Vector2 position)
             : base(id, "End", NodeCategory.Flow, position)
         {
-            Inputs.Add(new Port(InputPortId, "", PortDirection.Input,
+            Inputs.Add(new Port(InputPortId, "►", PortDirection.Input,
                                 PortCapacity.Multi, "flow"));
         }
     }

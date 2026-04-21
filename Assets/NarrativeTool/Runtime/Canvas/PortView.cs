@@ -5,15 +5,21 @@ using UnityEngine.UIElements;
 namespace NarrativeTool.Canvas
 {
     /// <summary>
-    /// One row on a NodeView: a port glyph (arrow for flow ports) and a label.
-    /// Input port glyph sits on the left edge; output port glyph sits on the
-    /// right edge. The glyph element is used as the anchor point for edges.
+    /// One row on a NodeView. Now also the entry point for edge creation:
+    /// the glyph carries an EdgeCreationManipulator that listens for drag
+    /// starts and hands off to the manipulator's session machinery.
     /// </summary>
     public sealed class PortView : VisualElement
     {
         public Port Port { get; }
         public VisualElement Glyph { get; }
         public Label LabelElement { get; }
+
+        /// <summary>
+        /// Owning NodeView. Set by NodeView at construction. The manipulator
+        /// uses this to find the canvas for drag-session coordination.
+        /// </summary>
+        public NodeView OwnerNode { get; set; }
 
         public PortView(Port port)
         {
@@ -23,12 +29,12 @@ namespace NarrativeTool.Canvas
 
             Glyph = new VisualElement();
             Glyph.AddToClassList("nt-port-glyph");
-            Glyph.AddToClassList("nt-port-flow"); // v1: only flow ports
+            Glyph.AddToClassList("nt-port-flow");
+            Glyph.pickingMode = PickingMode.Position;
 
             LabelElement = new Label(port.Label ?? "");
             LabelElement.AddToClassList("nt-port-label");
 
-            // Order within the row depends on side
             if (port.Direction == PortDirection.Input)
             {
                 Add(Glyph);
@@ -39,12 +45,14 @@ namespace NarrativeTool.Canvas
                 Add(LabelElement);
                 Add(Glyph);
             }
+
+            // Drag from this port's glyph initiates edge creation.
+            Glyph.AddManipulator(new EdgeCreationManipulator(this));
         }
 
         /// <summary>
-        /// Return the centre of the port glyph, expressed in the coordinate space
-        /// of the given target element (typically the canvas content layer or the
-        /// edge layer). Used by EdgeLayer to know where to start and end beziers.
+        /// Center of the port glyph in the coordinate space of the given
+        /// element. Used by EdgeView to place endpoints.
         /// </summary>
         public Vector2 GetAnchorIn(VisualElement target)
         {
@@ -52,6 +60,14 @@ namespace NarrativeTool.Canvas
             var centerWorld = new Vector2(rect.xMin + rect.width * 0.5f,
                                           rect.yMin + rect.height * 0.5f);
             return target.WorldToLocal(centerWorld);
+        }
+
+        // ---------- Visual feedback ----------
+
+        public void SetCompatibleHighlight(bool on)
+        {
+            if (on) Glyph.AddToClassList("nt-port-glyph--compatible");
+            else Glyph.RemoveFromClassList("nt-port-glyph--compatible");
         }
     }
 }

@@ -1,7 +1,7 @@
 ﻿.nt-root   { background-color: #1a1a1a; }
 .nt-canvas { background-color: #1a1a1a; }
 
-/* Node */
+/* ---------- Node ---------- */
 .nt-node {
     background-color: #2d2d2d;
     border-left-width: 1px; border-right-width: 1px;
@@ -15,10 +15,8 @@
 }
 
 .nt-node--selected {
-    border-left-color: #ffffff;
-    border-right-color: #ffffff;
-    border-top-color: #ffffff;
-    border-bottom-color: #ffffff;
+    border-left-color: #ffffff;  border-right-color: #ffffff;
+    border-top-color: #ffffff;   border-bottom-color: #ffffff;
     border-left-width: 2px;  border-right-width: 2px;
     border-top-width: 2px;   border-bottom-width: 2px;
 }
@@ -26,8 +24,7 @@
 .nt-node-header {
     height: 24px;
     padding-left: 10px; padding-right: 10px;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: row; align-items: center;
     border-top-left-radius: 5px; border-top-right-radius: 5px;
     margin-bottom: 4px;
 }
@@ -44,8 +41,7 @@
 .nt-header-data  { background-color: #2d6aa0; }
 
 .nt-node-body {
-    flex-direction: row;
-    justify-content: space-between;
+    flex-direction: row; justify-content: space-between;
     padding-left: 2px; padding-right: 2px;
 }
 
@@ -58,10 +54,9 @@
     padding-top: 4px;  padding-bottom: 2px;
 }
 
-/* Port */
+/* ---------- Port ---------- */
 .nt-port {
-    flex-direction: row;
-    align-items: center;
+    flex-direction: row; align-items: center;
     padding-top: 2px; padding-bottom: 2px;
     padding-left: 2px; padding-right: 2px;
     height: 18px;
@@ -89,7 +84,15 @@
 
 .nt-port-flow { background-color: #d8d8d8; }
 
-/* Text field */
+/* Port glyph highlighted as a valid drop target during edge creation */
+.nt-port-glyph--compatible {
+    background-color: #7dd87d;
+    width: 14px; height: 14px;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+}
+
+/* ---------- Text field inside node ---------- */
 .nt-node-textfield { margin-top: 2px; margin-bottom: 2px; }
 
 .nt-node-textfield > .unity-text-field__input {
@@ -111,7 +114,7 @@
     border-top-color: #5a8ac8;  border-bottom-color: #5a8ac8;
 }
 
-/* Context menu */
+/* ---------- Context menu ---------- */
 .nt-ctxmenu {
     background-color: #252525;
     border-left-width: 1px; border-right-width: 1px;
@@ -134,8 +137,7 @@
 }
 
 .nt-ctxmenu-item:hover {
-    background-color: #2d6aa0;
-    color: #ffffff;
+    background-color: #2d6aa0; color: #ffffff;
 }
 
 .nt-ctxmenu-item--disabled { color: #606060; }
@@ -146,4 +148,48 @@
     background-color: #3a3a3a;
     margin-top: 3px; margin-bottom: 3px;
     margin-left: 4px; margin-right: 4px;
+}
+
+/* ---------- Edge ---------- */
+.nt-edge { /* visual contents drawn via Painter2D */ }
+
+.nt-edge-label {
+    color: #dcdcdc;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    background-color: rgba(26, 26, 26, 0.85);
+    padding-left: 4px; padding-right: 4px;
+    padding-top: 1px;  padding-bottom: 1px;
+    border-top-left-radius: 2px;    border-top-right-radius: 2px;
+    border-bottom-left-radius: 2px; border-bottom-right-radius: 2px;
+}
+
+.nt-edge-label-editor {
+    background-color: rgba(26, 26, 26, 0.95);
+}
+
+.nt-edge-label-editor > .unity-text-field__input {
+    background-color: #1d1d1d;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #5a8ac8; border-right-color: #5a8ac8;
+    border-top-color: #5a8ac8;  border-bottom-color: #5a8ac8;
+    border-top-left-radius: 2px;    border-top-right-radius: 2px;
+    border-bottom-left-radius: 2px; border-bottom-right-radius: 2px;
+    color: #ffffff;
+    padding-left: 4px; padding-right: 4px;
+    padding-top: 1px;  padding-bottom: 1px;
+    font-size: 11px;
+}
+
+/* ---------- Compatibility tooltip ---------- */
+.nt-edge-compat-tooltip {
+    color: #e8c8c8;
+    background-color: rgba(120, 30, 30, 0.92);
+    font-size: 11px;
+    padding-left: 6px; padding-right: 6px;
+    padding-top: 3px;  padding-bottom: 3px;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    position: absolute;
 }

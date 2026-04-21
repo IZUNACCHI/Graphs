@@ -45,6 +45,9 @@ namespace NarrativeTool.App
             contextMenu.SetRootHost(root);
             contextMenu.RegisterProvider(new CanvasContextMenuProvider());
             contextMenu.RegisterProvider(new NodeContextMenuProvider());
+            contextMenu.RegisterProvider(new EdgeContextMenuProvider());
+            contextMenu.RegisterProvider(new WaypointContextMenuProvider());
+            contextMenu.RegisterProvider(new EdgeDropContextMenuProvider());
 
             var project = BuildTestProject();
             var graph = project.Graphs[0];
