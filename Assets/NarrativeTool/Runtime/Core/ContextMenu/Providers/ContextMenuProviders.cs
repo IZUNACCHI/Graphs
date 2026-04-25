@@ -86,7 +86,7 @@ namespace NarrativeTool.Core.ContextMenu
                 var choiceData = (ChoiceNodeData)choiceView.Node;
                 items.Insert(0, ContextMenuItem.Of("Add Option", () => choiceView.AddOption()));
                 items.Insert(0, ContextMenuItem.Of(
-                    choiceData.HasPreamble ? "Hide Preamble" : "Show Preamble",
+                   choiceData.HasPreamble ? "Hide Preamble" : "Show Preamble",
                     () => TogglePreamble(choiceData, choiceView)));
             }
 
@@ -103,7 +103,7 @@ namespace NarrativeTool.Core.ContextMenu
                 v => data.HasPreamble = (bool)v,
                 oldVal, newVal,
                 view.Canvas.Bus));
-            view.UpdatePreambleUI();
+            view.UpdatePreambleUI();   // immediate visual update
         }
     }
 
