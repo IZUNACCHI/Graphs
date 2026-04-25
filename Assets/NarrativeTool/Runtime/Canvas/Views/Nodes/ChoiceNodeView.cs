@@ -141,7 +141,7 @@ namespace NarrativeTool.Canvas.Views
 
             if (!portViews.ContainsKey(option.PortId))
             {
-                var portData = new PortData(option.PortId, option.Label,
+                var portData = new PortData(option.PortId, "",
                     PortDirection.Output, PortCapacity.Single, "flow");
                 var portView = new PortView(portData) { OwnerNode = this };
                 portViews[option.PortId] = portView;
