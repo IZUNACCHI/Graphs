@@ -190,7 +190,7 @@ namespace NarrativeTool.Canvas.Views
             var sortCol = new VisualElement();
             sortCol.AddToClassList("nt-option-sort");
             var upBtn = new Button(() => MoveOption(option, -1));
-            upBtn.text = "▲";
+            upBtn.text = "$";
             upBtn.AddToClassList("nt-option-sort-btn");
             upBtn.SetEnabled(index > 0);
             sortCol.Add(upBtn);
@@ -219,7 +219,7 @@ namespace NarrativeTool.Canvas.Views
             condBody.AddToClassList("nt-option-condition-body");
 
             var condBtn = new Button();
-            condBtn.text = "✦";
+            condBtn.text = "Script";
             condBtn.AddToClassList("nt-option-condition-btn");
             condBtn.EnableInClassList("nt-option-condition-btn--active", option.ConditionEnabled);
             condBtn.clicked += () =>
@@ -239,7 +239,7 @@ namespace NarrativeTool.Canvas.Views
 
             // Remove button
             var removeBtn = new Button(() => RemoveOption(option));
-            removeBtn.text = "✕";
+            removeBtn.text = "X";
             removeBtn.AddToClassList("nt-option-remove-btn");
             row.Add(removeBtn);
 
