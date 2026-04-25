@@ -736,6 +736,7 @@
 .nt-vars-swatch--float  { background-color: #2d8a6a; }
 .nt-vars-swatch--bool   { background-color: #a06a30; }
 .nt-vars-swatch--string { background-color: #8b4090; }
+.nt-vars-swatch--enum   { background-color: #c0a040; }
 
 .nt-vars-name {
     color: #b8b8b8;

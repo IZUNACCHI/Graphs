@@ -42,6 +42,11 @@ namespace NarrativeTool.UI.FolderTree
         public string SelectedItemId { get; set; }
         public string Filter { get; set; } = "";
 
+        // Display label for the always-present root folder (FolderPath = "").
+        // Root is rendered as a regular folder header but its rename/delete
+        // options are filtered out by the context-menu provider.
+        public string RootDisplayName { get; set; } = "Root";
+
         // ── Inline folder rename ──
         // Set RenamingFolderPath and call Rebuild() to swap that folder's
         // label for an inline TextField; the panel handles the resulting
@@ -98,16 +103,20 @@ namespace NarrativeTool.UI.FolderTree
                 list.Add(item);
             }
 
-            // Root items first.
-            if (byFolder.TryGetValue("", out var rootItems))
+            // Always render the root as an explicit, undeletable folder
+            // header (path = ""). Items at the root sit beneath it.
+            listContainer.Add(BuildFolderHeader(""));
+            if (!IsFolderCollapsed("") && byFolder.TryGetValue("", out var rootItems))
             {
                 foreach (var it in rootItems) listContainer.Add(BuildItemRow(it));
             }
 
-            // Folders alphabetically. Render folder header even if it has no
-            // matching items (so empty folders are visible / right-clickable).
+            // Other folders alphabetically. Render folder header even if it
+            // has no matching items (so empty folders are visible /
+            // right-clickable).
             foreach (var folder in folders.OrderBy(f => f))
             {
+                if (string.IsNullOrEmpty(folder)) continue; // root already drawn
                 bool folderMatches = string.IsNullOrEmpty(Filter)
                     || folder.IndexOf(Filter, StringComparison.OrdinalIgnoreCase) >= 0;
                 bool hasMatchingItems = byFolder.TryGetValue(folder, out var children) && children.Count > 0;
@@ -130,8 +139,11 @@ namespace NarrativeTool.UI.FolderTree
 
         private VisualElement BuildFolderHeader(string folderPath)
         {
+            bool isRoot = string.IsNullOrEmpty(folderPath);
+
             var row = new VisualElement();
             row.AddToClassList("nt-tree-folder");
+            if (isRoot) row.AddToClassList("nt-tree-folder--root");
             row.userData = folderPath;
 
             bool isCollapsed = IsFolderCollapsed(folderPath);
@@ -139,7 +151,8 @@ namespace NarrativeTool.UI.FolderTree
             caret.AddToClassList("nt-tree-folder-caret");
             row.Add(caret);
 
-            if (RenamingFolderPath == folderPath)
+            // Rename UI doesn't apply to the root — it's undeletable / unrenameable.
+            if (!isRoot && RenamingFolderPath == folderPath)
             {
                 var input = new TextField { value = folderPath };
                 input.AddToClassList("nt-tree-folder-rename");
@@ -176,7 +189,7 @@ namespace NarrativeTool.UI.FolderTree
                 return row;
             }
 
-            var label = new Label("📁 " + folderPath);
+            var label = new Label(isRoot ? "📁 " + RootDisplayName : "📁 " + folderPath);
             label.AddToClassList("nt-tree-folder-label");
             row.Add(label);
 

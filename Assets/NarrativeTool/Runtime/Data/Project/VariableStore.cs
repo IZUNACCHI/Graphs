@@ -52,6 +52,7 @@ namespace NarrativeTool.Data.Project
             VariableType.Float => 0f,
             VariableType.Bool => false,
             VariableType.String => "",
+            VariableType.Enum => null,   // resolved once an EnumTypeId is picked
             _ => null,
         };
     }

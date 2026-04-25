@@ -108,13 +108,23 @@ namespace NarrativeTool.App
             graph.Edges.Add(new Edge("e3", dialog.Id, TestNodeData.OutputPortId,
                                            end.Id, EndNodeData.InputPortId));
 
-            // Seed a few variables and folders so the panel has something to render.
+            // Seed an enum type so enum-typed variables have something to bind to.
+            var moodEnum = new EnumDefinition("enum_seed_mood", "Mood");
+            moodEnum.Members.Add(new EnumMember("mood_happy", "Happy"));
+            moodEnum.Members.Add(new EnumMember("mood_sad", "Sad"));
+            moodEnum.Members.Add(new EnumMember("mood_neutral", "Neutral"));
+            project.Enums.Enums.Add(moodEnum);
+
+            // Seed variables and folders so the panel has something to render.
             project.Variables.Folders.Add("player");
             project.Variables.Folders.Add("world");   // deliberately empty
             project.Variables.Variables.Add(new VariableDefinition(
                 "var_seed_rep", "reputation", VariableType.Int, 0, "player"));
             project.Variables.Variables.Add(new VariableDefinition(
                 "var_seed_met", "hasMetElara", VariableType.Bool, false, "player"));
+            project.Variables.Variables.Add(new VariableDefinition(
+                "var_seed_mood", "mood", VariableType.Enum, "mood_neutral", "player",
+                enumTypeId: "enum_seed_mood"));
             project.Variables.Variables.Add(new VariableDefinition(
                 "var_seed_act", "act", VariableType.Int, 1, ""));
 
