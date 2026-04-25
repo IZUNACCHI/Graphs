@@ -215,11 +215,26 @@ namespace NarrativeTool.Canvas.Views
             row.Add(textField);
 
             // Condition toggle button
-            var condBtn = new Button(() => ToggleCondition(option, container));
+            var condBody = new VisualElement();   // declared early so condBtn closure can reference it
+            condBody.AddToClassList("nt-option-condition-body");
+
+            var condBtn = new Button();
             condBtn.text = "✦";
             condBtn.AddToClassList("nt-option-condition-btn");
-            if (!string.IsNullOrEmpty(option.ConditionScript))
-                condBtn.AddToClassList("nt-option-condition-btn--active");
+            condBtn.EnableInClassList("nt-option-condition-btn--active", option.ConditionEnabled);
+            condBtn.clicked += () =>
+            {
+                bool oldVal = option.ConditionEnabled;
+                bool newVal = !oldVal;
+                Canvas.Commands.Execute(new SetPropertyCommand("ConditionEnabled",
+                    v =>
+                    {
+                        option.ConditionEnabled = (bool)v;
+                        condBtn.EnableInClassList("nt-option-condition-btn--active", option.ConditionEnabled);
+                        condBody.style.display = option.ConditionEnabled ? DisplayStyle.Flex : DisplayStyle.None;
+                    },
+                    oldVal, newVal, Canvas.Bus));
+            };
             row.Add(condBtn);
 
             // Remove button
@@ -231,12 +246,7 @@ namespace NarrativeTool.Canvas.Views
             container.Add(row);
 
             // Condition body
-            var condBody = new VisualElement();
-            condBody.AddToClassList("nt-option-condition-body");
-            bool expanded = option.ConditionExpanded || option.HasCondition;
-            option.ConditionExpanded = expanded;
-            condBody.style.display = expanded ? DisplayStyle.Flex : DisplayStyle.None;
-            condBtn.EnableInClassList("nt-option-condition-btn--active", expanded);
+            condBody.style.display = option.ConditionEnabled ? DisplayStyle.Flex : DisplayStyle.None;
 
             // Condition field
             var condFieldRow = new VisualElement();
@@ -275,16 +285,6 @@ namespace NarrativeTool.Canvas.Views
             return container;
         }
 
-        private void ToggleCondition(ChoiceOption option, VisualElement container)
-        {
-            option.ConditionExpanded = !option.ConditionExpanded;
-            var condBtn = container.Q<Button>(className: "nt-option-condition-btn");
-            condBtn?.EnableInClassList("nt-option-condition-btn--active", option.ConditionExpanded);
-            var condBody = container.Q<VisualElement>(className: "nt-option-condition-body");
-            if (condBody != null)
-                condBody.style.display = option.ConditionExpanded ? DisplayStyle.Flex : DisplayStyle.None;
-        }
-
         private void ShowDeleteConfirmation(VisualElement optionRow, ChoiceOption option, int index)
         {
             var confirm = new VisualElement();
@@ -316,7 +316,7 @@ namespace NarrativeTool.Canvas.Views
             optionRow.Clear();
             optionRow.Add(confirm);
 
-            // Register click-outside dismissal on the node root (world-space check)
+            // Register on the canvas so any click anywhere outside the confirm dismisses it
             EventCallback<PointerDownEvent> clickOutside = null;
             clickOutside = evt =>
             {
@@ -324,10 +324,10 @@ namespace NarrativeTool.Canvas.Views
                     !optionRow.worldBound.Contains(evt.position))
                 {
                     DismissConfirm(optionRow);
-                    this.UnregisterCallback(clickOutside, TrickleDown.TrickleDown);
+                    Canvas.UnregisterCallback(clickOutside, TrickleDown.TrickleDown);
                 }
             };
-            this.RegisterCallback(clickOutside, TrickleDown.TrickleDown);
+            Canvas.RegisterCallback(clickOutside, TrickleDown.TrickleDown);
         }
 
         private void DismissConfirm(VisualElement optionRow)
