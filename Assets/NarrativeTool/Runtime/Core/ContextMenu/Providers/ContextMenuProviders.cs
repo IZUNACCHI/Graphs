@@ -81,14 +81,12 @@ namespace NarrativeTool.Core.ContextMenu
             ContextMenuItem.Of("Delete", canvas.DeleteSelected)
         };
 
-            // Choice-specific items
-            if (nv.Node is ChoiceNodeData choiceData)
+            if (nv is ChoiceNodeView choiceView)
             {
-                items.Insert(0, ContextMenuItem.Of("Add Option", () =>
-                    ((ChoiceNodeView)nv).AddOption()));
+                items.Insert(0, ContextMenuItem.Of("Add Option", () => choiceView.AddOption()));
                 items.Insert(0, ContextMenuItem.Of(
-                    choiceData.HasPreamble ? "Hide Preamble" : "Show Preamble",
-                    () => TogglePreamble(choiceData, (ChoiceNodeView)nv)));
+                    choiceView.DataHasPreamble ? "Hide Preamble" : "Show Preamble",
+                    () => TogglePreamble(choiceView.Data, choiceView)));
             }
 
             return items;
