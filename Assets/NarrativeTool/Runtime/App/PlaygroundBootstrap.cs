@@ -108,7 +108,9 @@ namespace NarrativeTool.App
             graph.Edges.Add(new Edge("e3", dialog.Id, TestNodeData.OutputPortId,
                                            end.Id, EndNodeData.InputPortId));
 
-            // Seed a few variables so the panel has something to render.
+            // Seed a few variables and folders so the panel has something to render.
+            project.Variables.Folders.Add("player");
+            project.Variables.Folders.Add("world");   // deliberately empty
             project.Variables.Variables.Add(new VariableDefinition(
                 "var_seed_rep", "reputation", VariableType.Int, 0, "player"));
             project.Variables.Variables.Add(new VariableDefinition(

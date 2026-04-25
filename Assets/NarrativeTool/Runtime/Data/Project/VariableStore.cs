@@ -10,10 +10,23 @@ namespace NarrativeTool.Data.Project
     {
         public List<VariableDefinition> Variables { get; } = new();
 
+        // Declared folder paths. Stored separately from variables so empty
+        // folders persist and so a folder rename/delete is a single operation.
+        // Paths are flat strings for now; "/"-delimited nesting can be added
+        // later — the FolderTreeView already groups on the path string.
+        public List<string> Folders { get; } = new();
+
         public VariableDefinition Find(string id)
         {
             foreach (var v in Variables) if (v.Id == id) return v;
             return null;
+        }
+
+        public bool FolderExists(string path)
+        {
+            path ??= "";
+            if (string.IsNullOrEmpty(path)) return true; // root always exists
+            return Folders.Contains(path);
         }
 
         /// <summary>

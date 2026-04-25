@@ -1,8 +1,8 @@
-using NarrativeTool.Core;
 using NarrativeTool.Core.Commands;
 using NarrativeTool.Core.ContextMenu;
 using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Data.Project;
+using NarrativeTool.UI.FolderTree;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,13 +12,12 @@ using UnityEngine.UIElements;
 namespace NarrativeTool.UI.Variables
 {
     /// <summary>
-    /// Sidebar panel that lists project variables, lets the user filter,
-    /// add, delete, rename, and edit type/default values. Right-click on a
-    /// variable, folder, or empty area opens a context menu via the shared
-    /// <see cref="ContextMenuController"/>.
+    /// Sidebar panel listing project variables grouped by folder, with inline
+    /// editing of the selected item. All mutations go through commands on
+    /// <see cref="SessionState.ProjectCommands"/>.
     ///
-    /// All mutations go through commands on <see cref="SessionState.ProjectCommands"/>
-    /// so they're undoable independently of any open graph's history.
+    /// Folder rendering is delegated to <see cref="FolderTreeView"/> — a
+    /// reusable widget that the future Graphs panel will share.
     /// </summary>
     public sealed class VariablesPanel : VisualElement
     {
@@ -29,19 +28,17 @@ namespace NarrativeTool.UI.Variables
 
         // UI
         private TextField filterField;
-        private VisualElement listContainer;
-        private VisualElement editorContainer;
+        private FolderTreeView tree;
 
         // Local state
-        private string filter = "";
         private string selectedId;
-        private string renamingId;     // null when not renaming
-        private readonly HashSet<string> collapsedFolders = new();
-
-        // Per-rebuild lookup so context-menu targets can find rows by id.
-        private readonly Dictionary<string, VisualElement> rowsById = new();
+        // When set, the inline name field of the selected variable should
+        // grab focus on next rebuild — used after "Rename" is chosen so the
+        // user lands directly in the name input.
+        private string focusNameForId;
 
         private IDisposable subAdded, subRemoved, subRenamed, subTypeChanged, subDefaultChanged, subMoved;
+        private IDisposable subFolderAdded, subFolderRemoved, subFolderRenamed;
 
         public VariablesPanel()
         {
@@ -55,8 +52,7 @@ namespace NarrativeTool.UI.Variables
             tabActive.AddToClassList("nt-vars-tab");
             tabActive.AddToClassList("nt-vars-tab--active");
             header.Add(tabActive);
-            // TODO: Entities tab — currently disabled placeholder. Activate
-            // when an entity store lands; the same panel layout will work.
+            // TODO: Entities tab — placeholder until an entity store lands.
             var tabEntities = new Label("Entities");
             tabEntities.AddToClassList("nt-vars-tab");
             tabEntities.AddToClassList("nt-vars-tab--disabled");
@@ -69,11 +65,13 @@ namespace NarrativeTool.UI.Variables
 
             filterField = new TextField { value = "" };
             filterField.AddToClassList("nt-vars-filter");
-            // SetPlaceholderText is API-version-dependent; fall back gracefully.
             filterField.RegisterValueChangedCallback(evt =>
             {
-                filter = evt.newValue ?? "";
-                Rebuild();
+                if (tree != null)
+                {
+                    tree.Filter = evt.newValue ?? "";
+                    tree.Rebuild();
+                }
             });
             filterRow.Add(filterField);
 
@@ -83,21 +81,43 @@ namespace NarrativeTool.UI.Variables
 
             Add(filterRow);
 
-            // ── List ──
-            var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.AddToClassList("nt-vars-scroll");
-            listContainer = scroll.contentContainer;
-            listContainer.AddToClassList("nt-vars-list");
-            Add(scroll);
-
-            // ── Inline editor (shown when something is selected) ──
-            editorContainer = new VisualElement();
-            editorContainer.AddToClassList("nt-vars-editor");
-            editorContainer.style.display = DisplayStyle.None;
-            Add(editorContainer);
-
-            // Right-click on empty list area = "Add" via context menu
-            listContainer.RegisterCallback<PointerDownEvent>(OnListPointerDown);
+            // ── Tree ──
+            tree = new FolderTreeView
+            {
+                GetFolders = () => project?.Variables.Folders ?? (IReadOnlyList<string>)Array.Empty<string>(),
+                GetItems = () => project?.Variables.Variables.Cast<object>() ?? Enumerable.Empty<object>(),
+                GetItemFolder = item => ((VariableDefinition)item).FolderPath,
+                GetItemId = item => ((VariableDefinition)item).Id,
+                GetItemSearchText = item =>
+                {
+                    var v = (VariableDefinition)item;
+                    return v.Name + " " + v.FolderPath;
+                },
+                BuildItemHeader = item => BuildVariableHeader((VariableDefinition)item),
+                BuildItemDetail = item => BuildVariableEditor((VariableDefinition)item),
+                OnItemClicked = item => SelectVariable(((VariableDefinition)item).Id, toggle: true),
+                OnItemContextMenu = (item, pos) =>
+                {
+                    var v = (VariableDefinition)item;
+                    SelectVariable(v.Id, toggle: false);
+                    contextMenu?.Open(new VariableContextTarget(this, v), pos);
+                },
+                OnFolderContextMenu = (folder, pos) =>
+                    contextMenu?.Open(new VariableFolderContextTarget(this, folder), pos),
+                OnEmptyContextMenu = (parent, pos) =>
+                    contextMenu?.Open(new VariableFolderContextTarget(this, parent), pos),
+                OnFolderRenameCommit = (oldPath, newPath) =>
+                {
+                    if (project.Variables.FolderExists(newPath))
+                    {
+                        Debug.LogWarning($"[Variables] Folder '{newPath}' already exists.");
+                        Rebuild();
+                        return;
+                    }
+                    Commands.Execute(new RenameVariableFolderCmd(project, bus, oldPath, newPath));
+                },
+            };
+            Add(tree);
 
             RegisterCallback<KeyDownEvent>(OnKeyDown);
         }
@@ -119,8 +139,11 @@ namespace NarrativeTool.UI.Variables
             });
             subRenamed = bus.Subscribe<VariableRenamedEvent>(_ => Rebuild());
             subTypeChanged = bus.Subscribe<VariableTypeChangedEvent>(_ => Rebuild());
-            subDefaultChanged = bus.Subscribe<VariableDefaultChangedEvent>(_ => RebuildEditorOnly());
+            subDefaultChanged = bus.Subscribe<VariableDefaultChangedEvent>(_ => Rebuild());
             subMoved = bus.Subscribe<VariableMovedEvent>(_ => Rebuild());
+            subFolderAdded = bus.Subscribe<VariableFolderAddedEvent>(_ => Rebuild());
+            subFolderRemoved = bus.Subscribe<VariableFolderRemovedEvent>(_ => Rebuild());
+            subFolderRenamed = bus.Subscribe<VariableFolderRenamedEvent>(_ => Rebuild());
 
             Rebuild();
         }
@@ -133,15 +156,24 @@ namespace NarrativeTool.UI.Variables
             subTypeChanged?.Dispose(); subTypeChanged = null;
             subDefaultChanged?.Dispose(); subDefaultChanged = null;
             subMoved?.Dispose(); subMoved = null;
+            subFolderAdded?.Dispose(); subFolderAdded = null;
+            subFolderRemoved?.Dispose(); subFolderRemoved = null;
+            subFolderRenamed?.Dispose(); subFolderRenamed = null;
         }
-
-        // ───────── Commands ─────────
 
         private CommandSystem Commands => session.ProjectCommands;
 
+        private void Rebuild()
+        {
+            if (tree == null) return;
+            tree.SelectedItemId = selectedId;
+            tree.Rebuild();
+        }
+
+        // ───────── Variable commands ─────────
+
         public void AddVariable(string folderPath)
         {
-            // Pick a unique default name within the target folder.
             string baseName = "newVariable";
             string name = baseName;
             int n = 1;
@@ -157,7 +189,7 @@ namespace NarrativeTool.UI.Variables
 
             Commands.Execute(new AddVariableCmd(project, bus, v));
             selectedId = v.Id;
-            renamingId = v.Id;   // open straight into rename so the user can name it
+            focusNameForId = v.Id;   // jump straight into the name field
             Rebuild();
         }
 
@@ -166,87 +198,107 @@ namespace NarrativeTool.UI.Variables
             Commands.Execute(new RemoveVariableCmd(project, bus, variableId));
         }
 
-        public void BeginRename(string variableId)
+        public void BeginRenameVariable(string variableId)
         {
-            renamingId = variableId;
             selectedId = variableId;
+            focusNameForId = variableId;
+            Rebuild();
+        }
+
+        // ───────── Folder commands ─────────
+
+        public void AddFolder()
+        {
+            string baseName = "newFolder";
+            string name = baseName;
+            int n = 1;
+            while (project.Variables.FolderExists(name)) name = $"{baseName}{++n}";
+            Commands.Execute(new AddVariableFolderCmd(project, bus, name));
+            BeginRenameFolder(name);   // drop the user straight into rename
+        }
+
+        public void RemoveFolder(string folderPath)
+        {
+            // Cascade delete: remove all variables in the folder, then remove
+            // the folder itself, all in one transaction so undo restores both.
+            using var tx = Commands.BeginTransaction($"Remove folder \"{folderPath}\"");
+            var inFolder = project.Variables.Variables
+                .Where(v => v.FolderPath == folderPath)
+                .Select(v => v.Id)
+                .ToList();
+            foreach (var id in inFolder)
+                Commands.Execute(new RemoveVariableCmd(project, bus, id));
+            Commands.Execute(new RemoveVariableFolderCmd(project, bus, folderPath));
+        }
+
+        public void BeginRenameFolder(string folderPath)
+        {
+            if (string.IsNullOrEmpty(folderPath)) return;
+            tree.RenamingFolderPath = folderPath;
+            // Make sure the folder is expanded so the user can see what's inside.
+            tree.SetFolderCollapsed(folderPath, false);
+            tree.Rebuild();
+        }
+
+        // ───────── Selection / inline edit ─────────
+
+        private void SelectVariable(string id, bool toggle)
+        {
+            if (toggle && selectedId == id)
+            {
+                selectedId = null;
+            }
+            else
+            {
+                selectedId = id;
+            }
             Rebuild();
         }
 
         private void CommitRename(VariableDefinition v, string newName)
         {
-            renamingId = null;
             newName = (newName ?? "").Trim();
-            if (string.IsNullOrEmpty(newName) || newName == v.Name)
-            {
-                Rebuild();
-                return;
-            }
+            if (string.IsNullOrEmpty(newName) || newName == v.Name) return;
             if (project.Variables.NameExistsInFolder(v.FolderPath, newName, excludeId: v.Id))
             {
                 Debug.LogWarning($"[Variables] Name '{newName}' already exists in folder '{v.FolderPath}'.");
-                Rebuild();
                 return;
             }
             Commands.Execute(new RenameVariableCmd(project, bus, v.Id, v.Name, newName));
         }
 
-        // ───────── Rebuilds ─────────
-
-        private void Rebuild()
+        private void CommitDefault(VariableDefinition v, object newValue)
         {
-            listContainer.Clear();
-            rowsById.Clear();
-            if (project == null) return;
-
-            // Group by folder, preserving list order within each.
-            var byFolder = new Dictionary<string, List<VariableDefinition>>();
-            foreach (var v in project.Variables.Variables)
-            {
-                if (!MatchesFilter(v)) continue;
-                if (!byFolder.TryGetValue(v.FolderPath, out var list))
-                    byFolder[v.FolderPath] = list = new List<VariableDefinition>();
-                list.Add(v);
-            }
-
-            // Render root folders first, then named folders alphabetically.
-            // (Nested folders not rendered as a tree yet — single level for v1.)
-            var folders = byFolder.Keys.OrderBy(k => k.Length == 0 ? 0 : 1).ThenBy(k => k).ToList();
-            foreach (var folder in folders)
-            {
-                if (!string.IsNullOrEmpty(folder))
-                    listContainer.Add(BuildFolderHeader(folder));
-
-                bool collapsed = collapsedFolders.Contains(folder);
-                if (!collapsed)
-                {
-                    foreach (var v in byFolder[folder])
-                    {
-                        var row = BuildVariableRow(v);
-                        listContainer.Add(row);
-                        rowsById[v.Id] = row;
-                    }
-                }
-            }
-
-            RebuildEditorOnly();
+            if (Equals(v.DefaultValue, newValue)) return;
+            Commands.Execute(new SetVariableDefaultCmd(project, bus, v.Id, v.DefaultValue, newValue));
         }
 
-        private void RebuildEditorOnly()
+        // ───────── Row builders ─────────
+
+        private VisualElement BuildVariableHeader(VariableDefinition v)
         {
-            editorContainer.Clear();
-            if (project == null || string.IsNullOrEmpty(selectedId))
-            {
-                editorContainer.style.display = DisplayStyle.None;
-                return;
-            }
-            var v = project.Variables.Find(selectedId);
-            if (v == null)
-            {
-                editorContainer.style.display = DisplayStyle.None;
-                return;
-            }
-            editorContainer.style.display = DisplayStyle.Flex;
+            var row = new VisualElement();
+            row.AddToClassList("nt-vars-row");
+
+            var swatch = new VisualElement();
+            swatch.AddToClassList("nt-vars-swatch");
+            swatch.AddToClassList("nt-vars-swatch--" + v.Type.ToString().ToLower());
+            row.Add(swatch);
+
+            var name = new Label(v.Name);
+            name.AddToClassList("nt-vars-name");
+            row.Add(name);
+
+            var typeBadge = new Label(v.Type.ToString().ToLower());
+            typeBadge.AddToClassList("nt-vars-type-badge");
+            row.Add(typeBadge);
+            return row;
+        }
+
+        private VisualElement BuildVariableEditor(VariableDefinition v)
+        {
+            var editor = new VisualElement();
+            editor.AddToClassList("nt-vars-editor");
 
             // Name
             var nameRow = BuildEditorRow("Name");
@@ -268,7 +320,18 @@ namespace NarrativeTool.UI.Variables
                 }
             });
             nameRow.Add(nameField);
-            editorContainer.Add(nameRow);
+            editor.Add(nameRow);
+
+            // If this is the variable that just asked for focus, grab it next frame.
+            if (focusNameForId == v.Id)
+            {
+                focusNameForId = null;
+                nameField.schedule.Execute(() =>
+                {
+                    nameField.Focus();
+                    nameField.SelectAll();
+                }).StartingIn(0);
+            }
 
             // Type
             var typeRow = BuildEditorRow("Type");
@@ -282,12 +345,14 @@ namespace NarrativeTool.UI.Variables
                 Commands.Execute(new SetVariableTypeCmd(project, bus, v.Id, v.Type, t, v.DefaultValue));
             });
             typeRow.Add(typeField);
-            editorContainer.Add(typeRow);
+            editor.Add(typeRow);
 
-            // Default value (type-dependent input)
+            // Default
             var defRow = BuildEditorRow("Default");
             defRow.Add(BuildDefaultInput(v));
-            editorContainer.Add(defRow);
+            editor.Add(defRow);
+
+            return editor;
         }
 
         private VisualElement BuildDefaultInput(VariableDefinition v)
@@ -327,114 +392,6 @@ namespace NarrativeTool.UI.Variables
             }
         }
 
-        private void CommitDefault(VariableDefinition v, object newValue)
-        {
-            if (Equals(v.DefaultValue, newValue)) return;
-            Commands.Execute(new SetVariableDefaultCmd(project, bus, v.Id, v.DefaultValue, newValue));
-        }
-
-        // ───────── Row builders ─────────
-
-        private VisualElement BuildFolderHeader(string folderPath)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("nt-vars-folder");
-            row.userData = folderPath;
-
-            bool collapsed = collapsedFolders.Contains(folderPath);
-            var caret = new Label(collapsed ? "▶" : "▼");
-            caret.AddToClassList("nt-vars-folder-caret");
-            row.Add(caret);
-
-            var label = new Label("📁 " + folderPath);
-            label.AddToClassList("nt-vars-folder-label");
-            row.Add(label);
-
-            row.RegisterCallback<PointerDownEvent>(e =>
-            {
-                if (e.button == 0)
-                {
-                    if (collapsed) collapsedFolders.Remove(folderPath);
-                    else collapsedFolders.Add(folderPath);
-                    Rebuild();
-                    e.StopPropagation();
-                }
-                else if (e.button == 1)
-                {
-                    contextMenu?.Open(new VariableFolderContextTarget(this, folderPath), e.position);
-                    e.StopPropagation();
-                }
-            });
-            return row;
-        }
-
-        private VisualElement BuildVariableRow(VariableDefinition v)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("nt-vars-row");
-            if (v.Id == selectedId) row.AddToClassList("nt-vars-row--selected");
-            if (!string.IsNullOrEmpty(v.FolderPath)) row.AddToClassList("nt-vars-row--indented");
-            row.userData = v;
-
-            var swatch = new VisualElement();
-            swatch.AddToClassList("nt-vars-swatch");
-            swatch.AddToClassList("nt-vars-swatch--" + v.Type.ToString().ToLower());
-            row.Add(swatch);
-
-            // Name (or inline rename field)
-            if (renamingId == v.Id)
-            {
-                var renameField = new TextField { value = v.Name };
-                renameField.AddToClassList("nt-vars-rename-input");
-                row.Add(renameField);
-                renameField.schedule.Execute(() => { renameField.Focus(); renameField.SelectAll(); }).StartingIn(0);
-                renameField.RegisterCallback<BlurEvent>(_ => CommitRename(v, renameField.value));
-                renameField.RegisterCallback<KeyDownEvent>(e =>
-                {
-                    if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
-                    {
-                        CommitRename(v, renameField.value);
-                        e.StopPropagation();
-                    }
-                    else if (e.keyCode == KeyCode.Escape)
-                    {
-                        renamingId = null;
-                        Rebuild();
-                        e.StopPropagation();
-                    }
-                });
-            }
-            else
-            {
-                var name = new Label(v.Name);
-                name.AddToClassList("nt-vars-name");
-                row.Add(name);
-            }
-
-            var typeBadge = new Label(v.Type.ToString().ToLower());
-            typeBadge.AddToClassList("nt-vars-type-badge");
-            row.Add(typeBadge);
-
-            row.RegisterCallback<PointerDownEvent>(e =>
-            {
-                if (renamingId == v.Id) return;
-                if (e.button == 0)
-                {
-                    selectedId = v.Id;
-                    Rebuild();
-                    e.StopPropagation();
-                }
-                else if (e.button == 1)
-                {
-                    selectedId = v.Id;
-                    Rebuild();
-                    contextMenu?.Open(new VariableContextTarget(this, v), e.position);
-                    e.StopPropagation();
-                }
-            });
-            return row;
-        }
-
         private static VisualElement BuildEditorRow(string labelText)
         {
             var row = new VisualElement();
@@ -446,22 +403,6 @@ namespace NarrativeTool.UI.Variables
         }
 
         // ───────── Input ─────────
-
-        private bool MatchesFilter(VariableDefinition v)
-        {
-            if (string.IsNullOrEmpty(filter)) return true;
-            return v.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0
-                || v.FolderPath.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private void OnListPointerDown(PointerDownEvent e)
-        {
-            // Right-click on the empty area of the list (not on a row) → "Add" menu at root.
-            if (e.button != 1) return;
-            if (e.target is VisualElement ve && ve != listContainer) return;
-            contextMenu?.Open(new VariableFolderContextTarget(this, ""), e.position);
-            e.StopPropagation();
-        }
 
         private void OnKeyDown(KeyDownEvent e)
         {
@@ -475,12 +416,11 @@ namespace NarrativeTool.UI.Variables
             }
             else if (e.keyCode == KeyCode.F2 && !string.IsNullOrEmpty(selectedId))
             {
-                BeginRename(selectedId);
+                BeginRenameVariable(selectedId);
                 e.StopPropagation();
             }
             else if ((e.keyCode == KeyCode.Delete || e.keyCode == KeyCode.Backspace)
-                     && !string.IsNullOrEmpty(selectedId)
-                     && string.IsNullOrEmpty(renamingId))
+                     && !string.IsNullOrEmpty(selectedId))
             {
                 RemoveVariable(selectedId);
                 e.StopPropagation();
@@ -501,7 +441,7 @@ namespace NarrativeTool.UI.Variables
     public sealed class VariableFolderContextTarget
     {
         public VariablesPanel Panel { get; }
-        public string FolderPath { get; }
+        public string FolderPath { get; }     // "" for root / empty area
         public VariableFolderContextTarget(VariablesPanel panel, string folderPath)
         { Panel = panel; FolderPath = folderPath ?? ""; }
     }

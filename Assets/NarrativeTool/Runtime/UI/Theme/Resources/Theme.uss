@@ -670,37 +670,62 @@
     margin-left: 0; margin-right: 0;
 }
 
-.nt-vars-scroll { flex-grow: 1; }
-.nt-vars-list { padding-top: 2px; padding-bottom: 2px; }
+/* ---------- Generic folder tree ---------- */
+.nt-tree { flex-grow: 1; flex-direction: column; }
+.nt-tree-scroll { flex-grow: 1; }
+.nt-tree-list { padding-top: 2px; padding-bottom: 2px; flex-grow: 1; }
 
-.nt-vars-folder {
+.nt-tree-folder {
     flex-direction: row;
     align-items: center;
     padding-left: 6px; padding-right: 6px;
     padding-top: 2px;  padding-bottom: 2px;
 }
-.nt-vars-folder-caret {
+.nt-tree-folder-caret {
     color: #555;
     font-size: 9px;
     width: 10px;
 }
-.nt-vars-folder-label {
+.nt-tree-folder-label {
     color: #777;
     font-size: 10px;
     margin-left: 3px;
+    flex-grow: 1;
+}
+.nt-tree-folder-rename {
+    flex-grow: 1;
+    margin-left: 3px;
+    font-size: 10px;
 }
 
-.nt-vars-row {
-    flex-direction: row;
-    align-items: center;
-    padding-left: 6px; padding-right: 6px;
-    padding-top: 2px;  padding-bottom: 2px;
+.nt-tree-item {
+    flex-direction: column;
     margin-left: 3px; margin-right: 3px;
     border-top-left-radius: 3px;    border-top-right-radius: 3px;
     border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
 }
-.nt-vars-row--indented { padding-left: 18px; }
-.nt-vars-row--selected { background-color: #2a2a2a; }
+.nt-tree-item--indented { padding-left: 12px; }
+.nt-tree-item--selected { background-color: #2a2a2a; }
+.nt-tree-item-header {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 4px; padding-right: 4px;
+    padding-top: 2px;  padding-bottom: 2px;
+}
+.nt-tree-item-detail {
+    border-top-width: 1px;
+    border-top-color: #333;
+    background-color: #1c1c1c;
+    padding-top: 4px; padding-bottom: 6px;
+    padding-left: 8px; padding-right: 8px;
+}
+
+/* ---------- Variable row content (sits inside .nt-tree-item-header) ---------- */
+.nt-vars-row {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+}
 
 .nt-vars-swatch {
     width: 6px; height: 6px;
@@ -717,11 +742,6 @@
     font-size: 10px;
     flex-grow: 1;
 }
-.nt-vars-rename-input {
-    flex-grow: 1;
-    font-size: 10px;
-    margin-right: 4px;
-}
 .nt-vars-type-badge {
     font-size: 9px;
     color: #666;
@@ -734,14 +754,8 @@
     padding-left: 3px; padding-right: 3px;
 }
 
-/* Inline editor below the list when a variable is selected */
-.nt-vars-editor {
-    border-top-width: 1px;
-    border-top-color: #2a2a2a;
-    padding-top: 4px; padding-bottom: 6px;
-    padding-left: 8px; padding-right: 8px;
-    background-color: #1c1c1c;
-}
+/* Inline variable editor (lives inside .nt-tree-item-detail) */
+.nt-vars-editor { flex-direction: column; }
 .nt-vars-editor-row {
     flex-direction: column;
     margin-bottom: 3px;
