@@ -127,8 +127,8 @@ namespace NarrativeTool.Canvas.Views
             int idx = data.Options.IndexOf(option);
             int newIdx = idx + delta;
             if (newIdx < 0 || newIdx >= data.Options.Count) return;
-            Canvas.Commands.Execute(new MoveOptionCmd(data, idx, newIdx));
-            RebuildOptionRows();
+            Canvas.Commands.Execute(new MoveOptionCmd(data, idx, newIdx,
+                onDo: RebuildOptionRows, onUndo: RebuildOptionRows));
         }
 
         // ── Row building ──
@@ -141,7 +141,7 @@ namespace NarrativeTool.Canvas.Views
 
             if (!portViews.ContainsKey(option.PortId))
             {
-                var portData = new PortData(option.PortId, option.Label,
+                var portData = new PortData(option.PortId, "",
                     PortDirection.Output, PortCapacity.Single, "flow");
                 var portView = new PortView(portData) { OwnerNode = this };
                 portViews[option.PortId] = portView;
@@ -209,8 +209,8 @@ namespace NarrativeTool.Canvas.Views
             {
                 option.Label = oldVal;
                 Canvas.Commands.Execute(new SetPropertyCommand("Option Label",
-                    v => option.Label = (string)v, oldVal, newVal,
-                    Canvas.Bus));
+                    v => option.Label = (string)v, oldVal, newVal, Canvas.Bus,
+                    onRefresh: () => textField.SetValueWithoutNotify(option.Label)));
             };
             row.Add(textField);
 
@@ -250,8 +250,8 @@ namespace NarrativeTool.Canvas.Views
             {
                 option.ConditionScript = oldVal;
                 Canvas.Commands.Execute(new SetPropertyCommand("ConditionScript",
-                    v => option.ConditionScript = (string)v, oldVal, newVal,
-                    Canvas.Bus));
+                    v => option.ConditionScript = (string)v, oldVal, newVal, Canvas.Bus,
+                    onRefresh: () => condField.SetValueWithoutNotify(option.ConditionScript)));
             };
             condFieldRow.Add(condField);
             condBody.Add(condFieldRow);
@@ -264,7 +264,8 @@ namespace NarrativeTool.Canvas.Views
             {
                 Canvas.Commands.Execute(new SetPropertyCommand("HideWhenConditionFalse",
                     v => option.HideWhenConditionFalse = (bool)v,
-                    evt.previousValue, evt.newValue, Canvas.Bus));
+                    evt.previousValue, evt.newValue, Canvas.Bus,
+                    onRefresh: () => toggle.SetValueWithoutNotify(option.HideWhenConditionFalse)));
             });
             toggleRow.Add(toggle);
             condBody.Add(toggleRow);
@@ -286,7 +287,6 @@ namespace NarrativeTool.Canvas.Views
 
         private void ShowDeleteConfirmation(VisualElement optionRow, ChoiceOption option, int index)
         {
-            // Replace row content with confirmation bar using USS classes
             var confirm = new VisualElement();
             confirm.AddToClassList("nt-option--confirm");
 
@@ -297,13 +297,13 @@ namespace NarrativeTool.Canvas.Views
             label.AddToClassList("nt-option-confirm-label");
             confirmRow.Add(label);
 
-            var removeBtn = new Button(() => ConfirmRemoveOption(option, index));
+            var removeBtn = new Button(() => { DismissConfirm(optionRow); ConfirmRemoveOption(option, index); });
             removeBtn.text = "Remove";
             removeBtn.AddToClassList("nt-btn");
             removeBtn.AddToClassList("nt-btn--danger");
             confirmRow.Add(removeBtn);
 
-            var cancelBtn = new Button(() => RestoreOptionRow(optionRow));
+            var cancelBtn = new Button(() => DismissConfirm(optionRow));
             cancelBtn.text = "Cancel";
             cancelBtn.AddToClassList("nt-btn");
             cancelBtn.AddToClassList("nt-btn--normal");
@@ -311,42 +311,32 @@ namespace NarrativeTool.Canvas.Views
 
             confirm.Add(confirmRow);
 
-            // Replace content
             var original = optionRow.Children().ToList();
             optionRow.userData = original;
             optionRow.Clear();
             optionRow.Add(confirm);
 
-            // Dismiss when clicking outside
-            var root = optionRow.hierarchy.parent;
-            root.RegisterCallback<PointerDownEvent>(OnClickOutside);
-        }
-
-        private void RestoreOptionRow(VisualElement optionRow)
-        {
-            if (optionRow.userData is List<VisualElement> original)
+            // Register click-outside dismissal on the node root (world-space check)
+            EventCallback<PointerDownEvent> clickOutside = null;
+            clickOutside = evt =>
             {
-                optionRow.Clear();
-                foreach (var child in original)
-                    optionRow.Add(child);
-                optionRow.userData = null;
-            }
-        }
-
-        private void OnClickOutside(PointerDownEvent evt)
-        {
-            // Simple: if the target is not within any confirm row, restore all?
-            // Better: store reference to the specific row.
-            // For simplicity, we can check all option rows for confirm state.
-            foreach (var kv in optionRows)
-            {
-                var row = kv.Value;
-                if (row.userData is List<VisualElement> && !row.ContainsPoint(evt.localPosition))
+                if (optionRow.userData is List<VisualElement> &&
+                    !optionRow.worldBound.Contains(evt.position))
                 {
-                    RestoreOptionRow(row);
-                    break; // only one confirm at a time
+                    DismissConfirm(optionRow);
+                    this.UnregisterCallback(clickOutside, TrickleDown.TrickleDown);
                 }
-            }
+            };
+            this.RegisterCallback(clickOutside, TrickleDown.TrickleDown);
+        }
+
+        private void DismissConfirm(VisualElement optionRow)
+        {
+            if (optionRow.userData is not List<VisualElement> original) return;
+            optionRow.Clear();
+            foreach (var child in original)
+                optionRow.Add(child);
+            optionRow.userData = null;
         }
     }
 }

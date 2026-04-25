@@ -1,23 +1,28 @@
 using NarrativeTool.Data.Graph.Nodes;
+using System;
 
 namespace NarrativeTool.Core.Commands
 {
     public class MoveOptionCmd : ICommand
     {
         private readonly ChoiceNodeData node;
-        private readonly int indexA, indexB;   // always adjacent
+        private readonly int indexA, indexB;
+        private readonly Action onDo, onUndo;
 
         public string Name => "Move option";
 
-        public MoveOptionCmd(ChoiceNodeData node, int indexA, int indexB)
+        public MoveOptionCmd(ChoiceNodeData node, int indexA, int indexB,
+                             Action onDo = null, Action onUndo = null)
         {
             this.node = node;
             this.indexA = indexA;
             this.indexB = indexB;
+            this.onDo = onDo;
+            this.onUndo = onUndo;
         }
 
-        public void Do() => Move(indexB, indexA);
-        public void Undo() => Move(indexA, indexB);
+        public void Do() { Move(indexB, indexA); onDo?.Invoke(); }
+        public void Undo() { Move(indexA, indexB); onUndo?.Invoke(); }
 
         private void Move(int from, int to)
         {

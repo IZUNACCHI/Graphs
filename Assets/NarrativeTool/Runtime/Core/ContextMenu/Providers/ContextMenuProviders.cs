@@ -36,7 +36,7 @@ namespace NarrativeTool.Core.ContextMenu
             foreach (var group in grouped)
             {
                 // Category header
-                items.Add(ContextMenuItem.Header($"Nodes — {group.Key}"));
+                items.Add(ContextMenuItem.Header($"Nodes ï¿½ {group.Key}"));
 
                 foreach (var desc in group)
                 {
@@ -120,9 +120,9 @@ namespace NarrativeTool.Core.ContextMenu
 
             var items = new List<ContextMenuItem>
             {
-                // "Set label" — opens inline editor (even if empty)
+                // "Set label" ï¿½ opens inline editor (even if empty)
                 ContextMenuItem.Of(
-                string.IsNullOrEmpty(ev.Edge.Label) ? "Set label…" : "Edit label…",
+                string.IsNullOrEmpty(ev.Edge.Label) ? "Set labelï¿½" : "Edit labelï¿½",
                 ev.BeginEditLabel),
 
                 // "Add waypoint here"

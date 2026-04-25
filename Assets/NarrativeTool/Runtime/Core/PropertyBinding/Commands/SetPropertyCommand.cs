@@ -15,29 +15,33 @@ namespace NarrativeTool.Core.Commands
         private readonly object oldValue;
         private readonly object newValue;
         private readonly EventBus eventBus;
-        private readonly string graphId;
+        private readonly Action onRefresh;
 
         public string Name => $"Set '{propertyId}'";
 
         public SetPropertyCommand(string propertyId, Action<object> setter,
-                                  object oldValue, object newValue, EventBus eventBus = null) 
+                                  object oldValue, object newValue,
+                                  EventBus eventBus = null, Action onRefresh = null)
         {
             this.propertyId = propertyId;
             this.setter = setter;
             this.oldValue = oldValue;
             this.newValue = newValue;
             this.eventBus = eventBus;
+            this.onRefresh = onRefresh;
         }
 
         public void Do()
         {
             setter(newValue);
+            onRefresh?.Invoke();
             eventBus?.Publish(new PropertyChangedEvent(propertyId, oldValue, newValue));
         }
 
         public void Undo()
         {
             setter(oldValue);
+            onRefresh?.Invoke();
             eventBus?.Publish(new PropertyChangedEvent(propertyId, newValue, oldValue));
         }
 
@@ -56,13 +60,11 @@ namespace NarrativeTool.Core.Commands
         public readonly string PropertyId;
         public readonly object OldValue;
         public readonly object NewValue;
-        public readonly string GraphId;   // nullable
         public PropertyChangedEvent(string propertyId, object oldValue, object newValue)
         {
             PropertyId = propertyId;
             OldValue = oldValue;
             NewValue = newValue;
-            GraphId = null;
         }
         public override string ToString() => $"{PropertyId}: {OldValue} to {NewValue}";
     }
