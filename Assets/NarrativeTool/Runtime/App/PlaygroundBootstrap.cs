@@ -5,7 +5,7 @@ using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
 using NarrativeTool.Data.Project;
-using NarrativeTool.UI.Variables;
+using NarrativeTool.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -59,6 +59,10 @@ namespace NarrativeTool.App
             contextMenu.RegisterProvider(new EdgeDropContextMenuProvider());
             contextMenu.RegisterProvider(new VariableContextMenuProvider());
             contextMenu.RegisterProvider(new VariableFolderContextMenuProvider());
+            contextMenu.RegisterProvider(new EntityContextMenuProvider());
+            contextMenu.RegisterProvider(new EntityFolderContextMenuProvider());
+            contextMenu.RegisterProvider(new EnumDefContextMenuProvider());
+            contextMenu.RegisterProvider(new EnumFolderContextMenuProvider());
 
             var project = BuildTestProject();
             var graph = project.Graphs[0];
@@ -71,9 +75,9 @@ namespace NarrativeTool.App
             split.style.flexGrow = 1;
             root.Add(split);
 
-            var varsPanel = new VariablesPanel();
-            split.Add(varsPanel);
-            varsPanel.Bind(project, session, contextMenu);
+            var sidebar = new ProjectSidebar();
+            split.Add(sidebar);
+            sidebar.Bind(project, session, contextMenu);
 
             canvas = new GraphView();
             canvas.style.flexGrow = 1;
@@ -114,6 +118,13 @@ namespace NarrativeTool.App
             moodEnum.Members.Add(new EnumMember("mood_sad", "Sad"));
             moodEnum.Members.Add(new EnumMember("mood_neutral", "Neutral"));
             project.Enums.Enums.Add(moodEnum);
+
+            // Seed an entity type so the Entities tab has something to render.
+            var character = new EntityDefinition("ent_seed_character", "Character");
+            character.Fields.Add(new EntityField("f_name", "name", VariableType.String, ""));
+            character.Fields.Add(new EntityField("f_age", "age", VariableType.Int, 0));
+            character.Fields.Add(new EntityField("f_mood", "mood", VariableType.Enum, "mood_neutral", "enum_seed_mood"));
+            project.Entities.Entities.Add(character);
 
             // Seed variables and folders so the panel has something to render.
             project.Variables.Folders.Add("player");

@@ -44,20 +44,8 @@ namespace NarrativeTool.UI.Variables
         {
             AddToClassList("nt-vars");
             focusable = true;
-
-            // ── Header (tabs) ──
-            var header = new VisualElement();
-            header.AddToClassList("nt-vars-tabs");
-            var tabActive = new Label("Variables");
-            tabActive.AddToClassList("nt-vars-tab");
-            tabActive.AddToClassList("nt-vars-tab--active");
-            header.Add(tabActive);
-            // TODO: Entities tab — placeholder until an entity store lands.
-            var tabEntities = new Label("Entities");
-            tabEntities.AddToClassList("nt-vars-tab");
-            tabEntities.AddToClassList("nt-vars-tab--disabled");
-            header.Add(tabEntities);
-            Add(header);
+            // Tabs are owned by the parent ProjectSidebar; this panel renders
+            // only its own filter + tree + inline editor.
 
             // ── Filter row ──
             var filterRow = new VisualElement();
@@ -76,6 +64,8 @@ namespace NarrativeTool.UI.Variables
             filterRow.Add(filterField);
 
             var addBtn = new Button(() => AddVariable("")) { text = "+" };
+            // Note: + button always adds at root. To add inside a folder use
+            // the folder's right-click menu.
             addBtn.AddToClassList("nt-vars-add-btn");
             filterRow.Add(addBtn);
 
@@ -209,28 +199,49 @@ namespace NarrativeTool.UI.Variables
 
         // ───────── Folder commands ─────────
 
-        public void AddFolder()
+        /// <summary>
+        /// Adds a new folder as a child of <paramref name="parent"/>. Pass ""
+        /// for a root-level folder.
+        /// </summary>
+        public void AddFolder(string parent)
         {
+            string parentPrefix = string.IsNullOrEmpty(parent) ? "" : parent + "/";
             string baseName = "newFolder";
             string name = baseName;
             int n = 1;
-            while (project.Variables.FolderExists(name)) name = $"{baseName}{++n}";
-            Commands.Execute(new AddVariableFolderCmd(project, bus, name));
-            BeginRenameFolder(name);   // drop the user straight into rename
+            while (project.Variables.FolderExists(parentPrefix + name)) name = $"{baseName}{++n}";
+            string fullPath = parentPrefix + name;
+            Commands.Execute(new AddVariableFolderCmd(project, bus, fullPath));
+            // Make sure the parent folder is open so the new child is visible.
+            if (!string.IsNullOrEmpty(parent)) tree.SetFolderCollapsed(parent, false);
+            BeginRenameFolder(fullPath);
         }
 
         public void RemoveFolder(string folderPath)
         {
-            // Cascade delete: remove all variables in the folder, then remove
-            // the folder itself, all in one transaction so undo restores both.
+            // Cascade delete every nested folder + every variable in any of
+            // them, then the folder itself. One transaction so undo restores
+            // the whole subtree.
             using var tx = Commands.BeginTransaction($"Remove folder \"{folderPath}\"");
-            var inFolder = project.Variables.Variables
-                .Where(v => v.FolderPath == folderPath)
+
+            string prefix = folderPath + "/";
+            var nestedFolders = project.Variables.Folders
+                .Where(f => f != null && f.StartsWith(prefix))
+                .ToList();
+            var allFolders = new List<string>(nestedFolders) { folderPath };
+
+            var inSubtree = project.Variables.Variables
+                .Where(v => v.FolderPath == folderPath
+                         || (v.FolderPath != null && v.FolderPath.StartsWith(prefix)))
                 .Select(v => v.Id)
                 .ToList();
-            foreach (var id in inFolder)
+
+            foreach (var id in inSubtree)
                 Commands.Execute(new RemoveVariableCmd(project, bus, id));
-            Commands.Execute(new RemoveVariableFolderCmd(project, bus, folderPath));
+            // Remove deepest paths first so each individual command sees a
+            // consistent state on undo.
+            foreach (var f in allFolders.OrderByDescending(s => s.Length))
+                Commands.Execute(new RemoveVariableFolderCmd(project, bus, f));
         }
 
         public void BeginRenameFolder(string folderPath)

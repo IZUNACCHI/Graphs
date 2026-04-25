@@ -39,10 +39,14 @@ namespace NarrativeTool.Core.ContextMenu
                 ? "Add variable"
                 : $"Add variable in '{folder}'";
 
+            string addFolderLabel = isRoot
+                ? "Add folder"
+                : $"Add folder in '{folder}'";
+
             var items = new List<ContextMenuItem>
             {
                 ContextMenuItem.Of(addVarLabel, () => panel.AddVariable(folder)),
-                ContextMenuItem.Of("Add folder", panel.AddFolder),
+                ContextMenuItem.Of(addFolderLabel, () => panel.AddFolder(folder)),
             };
 
             if (!isRoot)

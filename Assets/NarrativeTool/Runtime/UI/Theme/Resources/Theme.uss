@@ -737,6 +737,43 @@
 .nt-vars-swatch--bool   { background-color: #a06a30; }
 .nt-vars-swatch--string { background-color: #8b4090; }
 .nt-vars-swatch--enum   { background-color: #c0a040; }
+.nt-vars-swatch--entity { background-color: #4a9a6a; }
+
+/* Section headers used by the Entities panel (Entities / Enums) */
+.nt-vars-section {
+    flex-direction: row;
+    align-items: center;
+    background-color: #1c1c1c;
+    border-top-width: 1px;
+    border-top-color: #2a2a2a;
+    padding-left: 8px; padding-right: 4px;
+    padding-top: 3px;  padding-bottom: 3px;
+}
+.nt-vars-section--second { margin-top: 4px; }
+.nt-vars-section-label {
+    color: #888;
+    font-size: 10px;
+    flex-grow: 1;
+    -unity-font-style: bold;
+}
+
+/* Inline field/member rows inside an entity or enum's editor */
+.nt-vars-field-box {
+    background-color: #161616;
+    border-color: #2a2a2a;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    padding: 3px;
+    margin-top: 2px; margin-bottom: 2px;
+    flex-direction: column;
+}
+.nt-vars-field-toprow {
+    flex-direction: row;
+    align-items: center;
+}
+.nt-vars-field-toprow > .nt-vars-input { flex-grow: 1; }
 
 .nt-vars-name {
     color: #b8b8b8;

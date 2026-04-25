@@ -85,6 +85,15 @@ namespace NarrativeTool.UI.FolderTree
             else collapsed.Remove(path);
         }
 
+        // Internal node used to build the hierarchical render tree.
+        private sealed class FolderNode
+        {
+            public string Path;
+            public string DisplayName;
+            public int Depth;
+            public List<FolderNode> Children = new();
+        }
+
         public void Rebuild()
         {
             listContainer.Clear();
@@ -92,7 +101,7 @@ namespace NarrativeTool.UI.FolderTree
             var folders = GetFolders?.Invoke() ?? Array.Empty<string>();
             var items = GetItems?.Invoke()?.ToList() ?? new List<object>();
 
-            // Group items by folder.
+            // Group items by folder path.
             var byFolder = new Dictionary<string, List<object>>();
             foreach (var item in items)
             {
@@ -103,31 +112,69 @@ namespace NarrativeTool.UI.FolderTree
                 list.Add(item);
             }
 
-            // Always render the root as an explicit, undeletable folder
-            // header (path = ""). Items at the root sit beneath it.
-            listContainer.Add(BuildFolderHeader(""));
-            if (!IsFolderCollapsed("") && byFolder.TryGetValue("", out var rootItems))
-            {
-                foreach (var it in rootItems) listContainer.Add(BuildItemRow(it));
-            }
+            // Build a folder tree from "/"-delimited paths, then render
+            // recursively from the implicit root (path = "").
+            var root = BuildFolderTree(folders);
+            RenderFolderNode(root, byFolder);
+        }
 
-            // Other folders alphabetically. Render folder header even if it
-            // has no matching items (so empty folders are visible /
-            // right-clickable).
-            foreach (var folder in folders.OrderBy(f => f))
+        private FolderNode BuildFolderTree(IReadOnlyList<string> paths)
+        {
+            var root = new FolderNode { Path = "", DisplayName = RootDisplayName, Depth = 0 };
+            foreach (var p in paths.OrderBy(s => s))
             {
-                if (string.IsNullOrEmpty(folder)) continue; // root already drawn
-                bool folderMatches = string.IsNullOrEmpty(Filter)
-                    || folder.IndexOf(Filter, StringComparison.OrdinalIgnoreCase) >= 0;
-                bool hasMatchingItems = byFolder.TryGetValue(folder, out var children) && children.Count > 0;
-                if (!folderMatches && !hasMatchingItems) continue;
-
-                listContainer.Add(BuildFolderHeader(folder));
-                if (!IsFolderCollapsed(folder) && hasMatchingItems)
+                if (string.IsNullOrEmpty(p)) continue;
+                var segments = p.Split('/');
+                var current = root;
+                string sofar = "";
+                for (int i = 0; i < segments.Length; i++)
                 {
-                    foreach (var it in children) listContainer.Add(BuildItemRow(it));
+                    sofar = i == 0 ? segments[i] : sofar + "/" + segments[i];
+                    var existing = current.Children.FirstOrDefault(c => c.Path == sofar);
+                    if (existing == null)
+                    {
+                        existing = new FolderNode
+                        {
+                            Path = sofar,
+                            DisplayName = segments[i],
+                            Depth = current.Depth + 1,
+                        };
+                        current.Children.Add(existing);
+                    }
+                    current = existing;
                 }
             }
+            return root;
+        }
+
+        private void RenderFolderNode(FolderNode node, Dictionary<string, List<object>> byFolder)
+        {
+            // Skip rendering folders that don't match filter and have no
+            // matching descendants. (Root is always rendered.)
+            if (!string.IsNullOrEmpty(node.Path) && !FolderHasMatch(node, byFolder))
+                return;
+
+            listContainer.Add(BuildFolderHeader(node.Path, node.DisplayName, node.Depth));
+            if (IsFolderCollapsed(node.Path)) return;
+
+            // Items at this level
+            if (byFolder.TryGetValue(node.Path, out var items))
+            {
+                foreach (var it in items) listContainer.Add(BuildItemRow(it, node.Depth + 1));
+            }
+
+            // Child folders alphabetically
+            foreach (var child in node.Children.OrderBy(c => c.DisplayName))
+                RenderFolderNode(child, byFolder);
+        }
+
+        private bool FolderHasMatch(FolderNode node, Dictionary<string, List<object>> byFolder)
+        {
+            if (string.IsNullOrEmpty(Filter)) return true;
+            if (node.Path.IndexOf(Filter, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (byFolder.TryGetValue(node.Path, out var items) && items.Count > 0) return true;
+            foreach (var c in node.Children) if (FolderHasMatch(c, byFolder)) return true;
+            return false;
         }
 
         private bool MatchesFilter(object item)
@@ -137,13 +184,16 @@ namespace NarrativeTool.UI.FolderTree
             return text.IndexOf(Filter, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private VisualElement BuildFolderHeader(string folderPath)
+        private const int IndentPx = 12;
+
+        private VisualElement BuildFolderHeader(string folderPath, string displayName, int depth)
         {
             bool isRoot = string.IsNullOrEmpty(folderPath);
 
             var row = new VisualElement();
             row.AddToClassList("nt-tree-folder");
             if (isRoot) row.AddToClassList("nt-tree-folder--root");
+            row.style.paddingLeft = 6 + depth * IndentPx;
             row.userData = folderPath;
 
             bool isCollapsed = IsFolderCollapsed(folderPath);
@@ -189,7 +239,7 @@ namespace NarrativeTool.UI.FolderTree
                 return row;
             }
 
-            var label = new Label(isRoot ? "📁 " + RootDisplayName : "📁 " + folderPath);
+            var label = new Label("📁 " + displayName);
             label.AddToClassList("nt-tree-folder-label");
             row.Add(label);
 
@@ -210,7 +260,7 @@ namespace NarrativeTool.UI.FolderTree
             return row;
         }
 
-        private VisualElement BuildItemRow(object item)
+        private VisualElement BuildItemRow(object item, int depth)
         {
             string id = GetItemId(item);
             bool isSelected = id == SelectedItemId;
@@ -218,8 +268,7 @@ namespace NarrativeTool.UI.FolderTree
             var container = new VisualElement();
             container.AddToClassList("nt-tree-item");
             if (isSelected) container.AddToClassList("nt-tree-item--selected");
-            string folder = GetItemFolder?.Invoke(item) ?? "";
-            if (!string.IsNullOrEmpty(folder)) container.AddToClassList("nt-tree-item--indented");
+            container.style.paddingLeft = depth * IndentPx;
             container.userData = item;
 
             var header = new VisualElement();
