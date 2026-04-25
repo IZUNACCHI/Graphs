@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace NarrativeTool.Core
+namespace NarrativeTool.Core.ContextMenu
 {
     /// <summary>
     /// Contributes items to a context menu. Return null / empty if the

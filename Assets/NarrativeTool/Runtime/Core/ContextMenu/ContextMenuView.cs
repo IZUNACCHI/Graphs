@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace NarrativeTool.Core
+namespace NarrativeTool.Core.ContextMenu
 {
     /// <summary>
     /// Popup context menu. Click-outside and Escape dismiss.
@@ -55,6 +55,13 @@ namespace NarrativeTool.Core
                 var sep = new VisualElement();
                 sep.AddToClassList("nt-ctxmenu-separator");
                 return sep;
+            }
+
+            if (item.IsHeader)
+            {
+                var header = new Label(item.Label ?? "");
+                header.AddToClassList("nt-ctxmenu-header");
+                return header;
             }
 
             var row = new Label(item.Label ?? "");

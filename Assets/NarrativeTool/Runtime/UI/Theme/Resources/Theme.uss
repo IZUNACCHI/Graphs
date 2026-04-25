@@ -2,6 +2,7 @@
 .nt-canvas { background-color: #1a1a1a; }
 
 /* ---------- Node ---------- */
+/* Base node style, shared across all node types */
 .nt-node {
     background-color: #2d2d2d;
     border-left-width: 1px; border-right-width: 1px;
@@ -10,10 +11,12 @@
     border-top-color: #404040;  border-bottom-color: #404040;
     border-top-left-radius: 6px;    border-top-right-radius: 6px;
     border-bottom-left-radius: 6px; border-bottom-right-radius: 6px;
-    padding-bottom: 6px;
-    min-width: 180px;
+    padding-bottom: 8px;
+    min-width: 240px;   
+    max-width: 340px;   
 }
 
+/* Highlighted state when node is selected */
 .nt-node--selected {
     border-left-color: #ffffff;  border-right-color: #ffffff;
     border-top-color: #ffffff;   border-bottom-color: #ffffff;
@@ -21,6 +24,7 @@
     border-top-width: 2px;   border-bottom-width: 2px;
 }
 
+/* Node header, containing the title and optionally other controls, code overrides the color */
 .nt-node-header {
     height: 24px;
     padding-left: 10px; padding-right: 10px;
@@ -29,12 +33,15 @@
     margin-bottom: 4px;
 }
 
+/* Node title text, contained within the header. Color is overridden by code based on node type, but other styles are shared. */
 .nt-node-title {
     color: #eaeaea;
     font-size: 12px;
     -unity-font-style: bold;
     -unity-text-align: middle-left;
 }
+
+
 
 .nt-header-event { background-color: #8b2020; }
 .nt-header-flow  { background-color: #3a3a3a; }
@@ -92,26 +99,344 @@
     border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
 }
 
-/* ---------- Text field inside node ---------- */
-.nt-node-textfield { margin-top: 2px; margin-bottom: 2px; }
+/* ---------- Property Field ---------- */
 
-.nt-node-textfield > .unity-text-field__input {
-    background-color: #1d1d1d;
+.nt-prop-container {
+    margin: 0px 10px;
+    flex-direction: column;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom-width: 1px;
+    border-bottom-color: #333333;
+}
+
+/* Remove separator from last child */
+.nt-prop-container--last {
+    border-bottom-width: 0;
+}
+
+.nt-prop-field {
+    flex-grow: 1;
+}
+
+/* Label — shared across all field types */
+.nt-prop-field .unity-base-field__label,
+.nt-prop-field .unity-toggle__label {
+    font-size: 10px;
+    color: #888888;
+    min-width: 0;
+    width: 80px;
+    flex-shrink: 0;
+    margin-right: 4px;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+}
+
+/* Text inputs only — NOT toggle */
+.nt-prop-field .unity-base-text-field__input,
+.nt-prop-field .unity-integer-field .unity-base-field__input,
+.nt-prop-field .unity-float-field .unity-base-field__input,
+.nt-prop-field .unity-enum-field .unity-base-field__input {
+    flex-grow: 1;
+    background-color: #1c1c1c;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 4px;    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+    padding-left: 7px; padding-right: 7px;
+    padding-top: 5px;  padding-bottom: 5px;
+    font-size: 11px;
+    color: #c8c8c8;
+}
+
+.nt-prop-field .unity-base-text-field__input:focus {
+    border-left-color: #4a9a6a; border-right-color: #4a9a6a;
+    border-top-color: #4a9a6a;  border-bottom-color: #4a9a6a;
+}
+
+/* Multiline */
+.nt-prop-field--multiline .unity-base-text-field__input {
+    min-height: 60px;
+    white-space: pre-wrap;
+}
+
+/* Toggle — only style the checkmark box itself, not the whole input area */
+.nt-prop-field .unity-toggle__checkmark {
+    background-color: #1c1c1c;
     border-left-width: 1px; border-right-width: 1px;
     border-top-width: 1px;  border-bottom-width: 1px;
     border-left-color: #3a3a3a; border-right-color: #3a3a3a;
     border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
     border-top-left-radius: 3px;    border-top-right-radius: 3px;
     border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
-    color: #e0e0e0;
-    padding-left: 6px; padding-right: 6px;
-    padding-top: 2px;  padding-bottom: 2px;
+    width: 16px;
+    height: 16px;
+}
+
+/* Placeholder text in field input */
+.unity-base-text-field__input--placeholder {
+    color: #555555;
+    -unity-font-style: italic;
     font-size: 11px;
 }
 
-.nt-node-textfield > .unity-text-field__input:focus {
-    border-left-color: #5a8ac8; border-right-color: #5a8ac8;
-    border-top-color: #5a8ac8;  border-bottom-color: #5a8ac8;
+/* ---------- Choice Node ---------- */
+
+/* Preamble toggle button — acts as a collapsible section divider */
+.nt-preamble-toggle {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 8px;
+    margin-right: 8px;
+    margin-top: 4px;
+    margin-bottom: 2px;
+}
+
+.nt-preamble-toggle-line {
+    flex-grow: 1;
+    height: 1px;
+    background-color: #333333;
+}
+
+.nt-preamble-toggle-btn {
+    background-color: #252525;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    color: #666666;
+    font-size: 10px;
+    padding-left: 7px; padding-right: 7px;
+    padding-top: 1px;  padding-bottom: 1px;
+    margin-left: 6px;  margin-right: 6px;
+}
+
+.nt-preamble-toggle-btn--active {
+    background-color: #2d4a3a;
+    border-left-color: #4a9a6a; border-right-color: #4a9a6a;
+    border-top-color: #4a9a6a;  border-bottom-color: #4a9a6a;
+    color: #7dcfa0;
+}
+
+/* Preamble content area — the fields shown when expanded */
+.nt-preamble-body {
+    padding-left: 8px; padding-right: 8px;
+    padding-top: 2px;  padding-bottom: 4px;
+}
+
+/* ---------- Option List ---------- */
+
+.nt-option-list {
+    margin-left: 8px;  margin-right: 8px;
+    margin-top: 4px;
+    border-top-width: 1px;
+    border-top-color: #333333;
+    padding-top: 4px;
+}
+
+/* Add Option button at the bottom */
+.nt-option-add-btn {
+    margin-left: 8px;  margin-right: 8px;
+    margin-top: 3px;   margin-bottom: 8px;
+    background-color: #252525;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 4px;    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+    color: #888888;
+    font-size: 11px;
+    padding-top: 3px;  padding-bottom: 3px;
+}
+
+/* ---------- Option Row ---------- */
+
+.nt-option {
+    background-color: #252525;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #383838; border-right-color: #383838;
+    border-top-color: #383838;  border-bottom-color: #383838;
+    border-top-left-radius: 4px;    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+    margin-bottom: 3px;
+}
+
+/* Top row: sort buttons + text input + condition toggle + remove */
+.nt-option-row {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 4px; padding-right: 4px;
+    padding-top: 3px;  padding-bottom: 3px;
+}
+
+/* Sort arrow buttons column */
+.nt-option-sort {
+    flex-direction: column;
+    margin-right: 3px;
+}
+
+.nt-option-sort-btn {
+    background-color: #1c1c1c;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    color: #888888;
+    font-size: 8px;
+    width: 15px; height: 13px;
+    margin-bottom: 1px;
+    -unity-text-align: middle-center;
+}
+
+/* Option text input */
+.nt-option-text {
+    flex-grow: 1;
+    margin-right: 3px;
+}
+
+.nt-option-text .unity-base-text-field__input {
+    background-color: #1c1c1c;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 4px;    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+    padding-left: 5px; padding-right: 5px;
+    padding-top: 2px;  padding-bottom: 2px;
+    font-size: 11px;
+    color: #c8c8c8;
+}
+
+.nt-option-text .unity-base-text-field__input:focus {
+    border-left-color: #4a9a6a; border-right-color: #4a9a6a;
+    border-top-color: #4a9a6a;  border-bottom-color: #4a9a6a;
+}
+
+/* Condition toggle button */
+.nt-option-condition-btn {
+    background-color: #1c1c1c;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    color: #666666;
+    font-size: 10px;
+    padding-left: 5px; padding-right: 5px;
+    padding-top: 1px;  padding-bottom: 1px;
+    margin-right: 3px;
+}
+
+.nt-option-condition-btn--active {
+    background-color: #2d4a3a;
+    border-left-color: #4a9a6a; border-right-color: #4a9a6a;
+    border-top-color: #4a9a6a;  border-bottom-color: #4a9a6a;
+    color: #7dcfa0;
+}
+
+/* Remove button */
+.nt-option-remove-btn {
+    background-color: #1c1c1c;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    color: #7a3030;
+    font-size: 10px;
+    padding-left: 5px; padding-right: 5px;
+    padding-top: 1px;  padding-bottom: 1px;
+}
+
+/* ---------- Option Condition Body ---------- */
+
+/* Shown below the option row when condition toggle is active */
+.nt-option-condition-body {
+    border-top-width: 1px;
+    border-top-color: #333333;
+    margin-left: 4px; margin-right: 4px;
+    padding-top: 4px; padding-bottom: 3px;
+    padding-left: 2px; padding-right: 2px;
+}
+
+/* Condition multiline input */
+.nt-option-condition-field {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 3px;
+}
+
+.nt-option-condition-field-label {
+    color: #666666;
+    font-size: 10px;
+    width: 56px;
+    flex-shrink: 0;
+    padding-top: 3px;
+    -unity-text-align: middle-left;
+}
+
+.nt-option-condition-field .unity-base-text-field__input {
+    flex-grow: 1;
+    background-color: #191919;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 4px;    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+    padding-left: 5px; padding-right: 5px;
+    padding-top: 3px;  padding-bottom: 3px;
+    font-size: 10px;
+    color: #c8c8c8;
+    min-height: 28px;
+    white-space: pre-wrap;
+}
+
+/* Show-if-false toggle row */
+.nt-option-condition-toggle {
+    flex-direction: row;
+    align-items: center;
+}
+
+.nt-option-condition-toggle .unity-toggle__label {
+    color: #666666;
+    font-size: 10px;
+    min-width: 0;
+    margin-right: 6px;
+}
+
+.nt-option-condition-toggle .unity-toggle__checkmark {
+    background-color: #1c1c1c;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    width: 13px; height: 13px;
+}
+
+/* ---------- Option Port ---------- */
+
+/* Overrides the standard output port margin to account for the extra
+   nesting depth: 8px option-list margin + 1px option border + 7px standard offset */
+.nt-option-port {
+    margin-right: -16px;
+    align-items: center;
+    justify-content: center;
+    padding-top: 2px;
+    padding-bottom: 2px;
 }
 
 /* ---------- Context menu ---------- */
@@ -150,6 +475,16 @@
     margin-left: 4px; margin-right: 4px;
 }
 
+.nt-ctxmenu-header {
+    font-size: 9px;
+    color: #888888;
+    padding-top: 6px;
+    padding-bottom: 2px;
+    padding-left: 10px;
+    padding-right: 10px;
+    -unity-font-style: bold;  /* compensates for losing uppercase */
+}
+
 /* ---------- Edge ---------- */
 .nt-edge { /* visual contents drawn via Painter2D */ }
 
@@ -180,6 +515,77 @@
     padding-left: 4px; padding-right: 4px;
     padding-top: 1px;  padding-bottom: 1px;
     font-size: 11px;
+}
+
+/* ---------- Buttons ---------- */
+
+.nt-btn {
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    padding-left: 8px; padding-right: 8px;
+    padding-top: 2px;  padding-bottom: 2px;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+}
+
+/* Normal button */
+.nt-btn--normal {
+    background-color: #1c1c1c;
+    border-left-color: #3a3a3a; border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
+    color: #888888;
+}
+
+.nt-btn--normal:hover {
+    background-color: #252525;
+    border-left-color: #4a4a4a; border-right-color: #4a4a4a;
+    border-top-color: #4a4a4a;  border-bottom-color: #4a4a4a;
+    color: #aaaaaa;
+}
+
+/* Danger button */
+.nt-btn--danger {
+    background-color: #5a2020;
+    border-left-color: #7a3030; border-right-color: #7a3030;
+    border-top-color: #7a3030;  border-bottom-color: #7a3030;
+    color: #e08080;
+}
+
+.nt-btn--danger:hover {
+    background-color: #6e2424;
+    border-left-color: #9a3a3a; border-right-color: #9a3a3a;
+    border-top-color: #9a3a3a;  border-bottom-color: #9a3a3a;
+    color: #f09090;
+}
+
+/* ---------- Option Delete Confirm ---------- */
+
+.nt-option--confirm {
+    background-color: #2a1a1a;
+    border-left-color: #5a2a2a; border-right-color: #5a2a2a;
+    border-top-color: #5a2a2a;  border-bottom-color: #5a2a2a;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-top-left-radius: 4px;    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+    margin-bottom: 3px;
+}
+
+.nt-option-confirm-row {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 8px; padding-right: 8px;
+    padding-top: 4px;  padding-bottom: 4px;
+}
+
+.nt-option-confirm-label {
+    flex-grow: 1;
+    color: #c07070;
+    font-size: 10px;
+    -unity-text-align: middle-left;
+    overflow: hidden;
 }
 
 /* ---------- Compatibility tooltip ---------- */

@@ -1,6 +1,10 @@
 ﻿using NarrativeTool.Canvas;
 using NarrativeTool.Core;
-using NarrativeTool.Data;
+using NarrativeTool.Core.ContextMenu;
+using NarrativeTool.Core.EventSystem;
+using NarrativeTool.Data.Graph;
+using NarrativeTool.Data.Graph.Nodes;
+using NarrativeTool.Data.Project;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -16,7 +20,7 @@ namespace NarrativeTool.App
     {
         [SerializeField] private StyleSheet theme;
 
-        private GraphCanvas canvas;
+        private GraphView canvas;
         private SessionState session;
         private ContextMenuController contextMenu;
 
@@ -27,6 +31,10 @@ namespace NarrativeTool.App
             var bus = new EventBus();
             Services.Register(bus);
             Services.Register(new ContextMenuController());
+
+            var nodeRegistry = new NodeRegistry();
+            nodeRegistry.RegisterBuiltInTypes();   // scans attributes
+            Services.Register(nodeRegistry);
 
             session = new SessionState(bus);
             contextMenu = Services.Get<ContextMenuController>();
@@ -52,7 +60,7 @@ namespace NarrativeTool.App
             var project = BuildTestProject();
             var graph = project.Graphs[0];
 
-            canvas = new GraphCanvas();
+            canvas = new GraphView();
             canvas.AddToClassList("nt-root");
             canvas.style.flexGrow = 1;
             root.Add(canvas);
@@ -66,21 +74,25 @@ namespace NarrativeTool.App
         private static ProjectModel BuildTestProject()
         {
             var project = new ProjectModel { Id = "proj_01", Name = "Playground" };
-            var graph = new GraphDocument("graph_01", "Main");
+            var graph = new GraphData("graph_01", "Main");
             project.Graphs.Add(graph);
 
-            var start = new StartNode("n_start", new Vector2(80, 140));
-            var text = new TextNode("n_text", "Text Node", new Vector2(340, 140), "Hello, traveller.");
-            var end = new EndNode("n_end", new Vector2(680, 140));
+            var start = new StartNodeData("n_start", new Vector2(80, 140));
+            var text = new TextNodeData("n_text", "Text Node", new Vector2(340, 140), "Hello, traveller.");
+            var dialog = new TestNodeData("n_dialog", "Dialog Node", new Vector2(500, 140));
+            var end = new EndNodeData("n_end", new Vector2(720, 140));
 
             graph.Nodes.Add(start);
             graph.Nodes.Add(text);
+            graph.Nodes.Add(dialog);
             graph.Nodes.Add(end);
 
-            graph.Edges.Add(new Edge("e1", start.Id, StartNode.OutputPortId,
-                                           text.Id, TextNode.InputPortId));
-            graph.Edges.Add(new Edge("e2", text.Id, TextNode.OutputPortId,
-                                           end.Id, EndNode.InputPortId));
+            graph.Edges.Add(new Edge("e1", start.Id, StartNodeData.OutputPortId,
+                                           text.Id, TextNodeData.InputPortId));
+            graph.Edges.Add(new Edge("e2", text.Id, TextNodeData.OutputPortId,
+                                           dialog.Id, TestNodeData.InputPortId));
+            graph.Edges.Add(new Edge("e3", dialog.Id, TestNodeData.OutputPortId,
+                                           end.Id, EndNodeData.InputPortId));
 
             return project;
         }

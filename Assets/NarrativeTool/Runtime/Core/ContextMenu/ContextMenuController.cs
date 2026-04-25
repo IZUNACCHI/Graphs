@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace NarrativeTool.Core
+namespace NarrativeTool.Core.ContextMenu
 {
     /// <summary>
     /// Central service that owns the currently-open context menu view and
