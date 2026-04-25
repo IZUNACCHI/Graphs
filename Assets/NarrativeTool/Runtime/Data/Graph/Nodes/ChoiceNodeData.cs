@@ -52,10 +52,9 @@ namespace NarrativeTool.Data.Graph.Nodes
     {
         public string Id { get; set; }
         public string Label { get; set; } = "";
+        public bool ConditionEnabled { get; set; }
         public string ConditionScript { get; set; } = "";
         public bool HideWhenConditionFalse { get; set; } = true;
-        public bool ConditionExpanded { get; set; }
-        public bool HasCondition => !string.IsNullOrWhiteSpace(ConditionScript);
         public string PortId { get; set; }
     }
 }
