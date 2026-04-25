@@ -35,25 +35,15 @@ namespace NarrativeTool.Data.Graph.Nodes
         }
 
 
-        public ChoiceOption AddOption(string text = "")
+        public static ChoiceOption MakeOption(string text = "")
         {
-            var option = new ChoiceOption
+            var id = System.Guid.NewGuid().ToString("N").Substring(0, 8);
+            return new ChoiceOption
             {
-                Id = $"opt_{System.Guid.NewGuid():N}".Substring(0, 8),
+                Id = $"opt_{id}",
                 Label = text,
-                PortId = $"opt_{Options.Count}"
+                PortId = $"out_{id}",
             };
-            Options.Add(option);
-            Outputs.Add(new PortData(option.PortId, text, PortDirection.Output, PortCapacity.Single, "flow"));
-            return option;
-        }
-
-        public void RemoveOption(int index)
-        {
-            if (index < 0 || index >= Options.Count) return;
-            var portId = Options[index].PortId;
-            Options.RemoveAt(index);
-            Outputs.RemoveAll(p => p.Id == portId);
         }
     }
 
@@ -64,6 +54,7 @@ namespace NarrativeTool.Data.Graph.Nodes
         public string Label { get; set; } = "";
         public string ConditionScript { get; set; } = "";
         public bool HideWhenConditionFalse { get; set; } = true;
+        public bool ConditionExpanded { get; set; }
         public bool HasCondition => !string.IsNullOrWhiteSpace(ConditionScript);
         public string PortId { get; set; }
     }

@@ -1,4 +1,4 @@
-// AddChoiceOptionCmd.cs
+using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
 using System;
 
@@ -8,6 +8,7 @@ namespace NarrativeTool.Core.Commands
     {
         private readonly ChoiceNodeData node;
         private readonly ChoiceOption option;
+        private readonly PortData port;
         private readonly int index;
         private readonly Action onDo, onUndo;
 
@@ -19,6 +20,8 @@ namespace NarrativeTool.Core.Commands
             this.node = node;
             this.index = index;
             this.option = option;
+            this.port = new PortData(option.PortId, option.Label,
+                                     PortDirection.Output, PortCapacity.Single, "flow");
             this.onDo = onDo;
             this.onUndo = onUndo;
         }
@@ -26,13 +29,14 @@ namespace NarrativeTool.Core.Commands
         public void Do()
         {
             node.Options.Insert(index, option);
-            // add output port (handled by view)
+            node.Outputs.Insert(index, port);
             onDo?.Invoke();
         }
 
         public void Undo()
         {
             node.Options.RemoveAt(index);
+            node.Outputs.Remove(port);
             onUndo?.Invoke();
         }
 
