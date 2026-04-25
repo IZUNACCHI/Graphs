@@ -10,11 +10,40 @@ namespace NarrativeTool.Data.Project
     public sealed class EnumStore
     {
         public List<EnumDefinition> Enums { get; } = new();
+        public List<string> Folders { get; } = new();
 
         public EnumDefinition Find(string id)
         {
             foreach (var e in Enums) if (e.Id == id) return e;
             return null;
+        }
+
+        public bool FolderExists(string path)
+        {
+            path ??= "";
+            if (string.IsNullOrEmpty(path)) return true;
+            return Folders.Contains(path);
+        }
+
+        public bool NameExistsInFolder(string folderPath, string name, string excludeId = null)
+        {
+            folderPath ??= "";
+            foreach (var e in Enums)
+            {
+                if (e.Id == excludeId) continue;
+                if (e.FolderPath == folderPath && e.Name == name) return true;
+            }
+            return false;
+        }
+
+        public bool MemberNameExists(EnumDefinition enumDef, string name, string excludeId = null)
+        {
+            foreach (var m in enumDef.Members)
+            {
+                if (m.Id == excludeId) continue;
+                if (m.Name == name) return true;
+            }
+            return false;
         }
 
         /// <summary>

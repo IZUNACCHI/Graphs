@@ -11,11 +11,12 @@ namespace NarrativeTool.Data.Project
     {
         public string Id { get; }
         public string Name { get; set; }
+        public string FolderPath { get; set; } = "";
         public List<EnumMember> Members { get; } = new();
 
-        public EnumDefinition(string id, string name)
+        public EnumDefinition(string id, string name, string folderPath = "")
         {
-            Id = id; Name = name;
+            Id = id; Name = name; FolderPath = folderPath ?? "";
         }
 
         public EnumMember FindMember(string memberId)

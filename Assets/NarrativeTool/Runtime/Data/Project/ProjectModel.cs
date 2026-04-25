@@ -13,6 +13,7 @@ namespace NarrativeTool.Data.Project
 
         public VariableStore Variables { get; } = new();
         public EnumStore Enums { get; } = new();
+        public EntityStore Entities { get; } = new();
 
         public GraphData FindGraph(string id)
         {

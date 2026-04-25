@@ -1,0 +1,736 @@
+using NarrativeTool.Core.Commands;
+using NarrativeTool.Core.ContextMenu;
+using NarrativeTool.Core.EventSystem;
+using NarrativeTool.Data.Project;
+using NarrativeTool.UI.FolderTree;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace NarrativeTool.UI.Entities
+{
+    /// <summary>
+    /// Sidebar content for user-defined types: entities (struct-like, with
+    /// fields) and enums (with members). Entities and enums each get their
+    /// own folder tree so users can organize them independently.
+    /// </summary>
+    public sealed class EntitiesPanel : VisualElement
+    {
+        private ProjectModel project;
+        private SessionState session;
+        private ContextMenuController contextMenu;
+        private EventBus bus;
+
+        private TextField filterField;
+        private FolderTreeView entityTree;
+        private FolderTreeView enumTree;
+
+        private string selectedEntityId;
+        private string selectedEnumId;
+        private string focusNameForEntityId;
+        private string focusNameForEnumId;
+
+        private readonly List<IDisposable> subs = new();
+
+        public EntitiesPanel()
+        {
+            AddToClassList("nt-vars");      // share base sidebar styles
+            focusable = true;
+
+            // Filter row
+            var filterRow = new VisualElement();
+            filterRow.AddToClassList("nt-vars-filter-row");
+            filterField = new TextField { value = "" };
+            filterField.AddToClassList("nt-vars-filter");
+            filterField.RegisterValueChangedCallback(evt =>
+            {
+                var f = evt.newValue ?? "";
+                if (entityTree != null) { entityTree.Filter = f; entityTree.Rebuild(); }
+                if (enumTree != null) { enumTree.Filter = f; enumTree.Rebuild(); }
+            });
+            filterRow.Add(filterField);
+            Add(filterRow);
+
+            // Entities section
+            var entitiesHeader = BuildSectionHeader("Entities", () => AddEntity(""));
+            Add(entitiesHeader);
+            entityTree = BuildEntityTree();
+            Add(entityTree);
+
+            // Enums section
+            var enumsHeader = BuildSectionHeader("Enums", () => AddEnum(""));
+            enumsHeader.AddToClassList("nt-vars-section--second");
+            Add(enumsHeader);
+            enumTree = BuildEnumTree();
+            Add(enumTree);
+
+            RegisterCallback<KeyDownEvent>(OnKeyDown);
+        }
+
+        public void Bind(ProjectModel project, SessionState session, ContextMenuController contextMenu)
+        {
+            Unbind();
+            this.project = project;
+            this.session = session;
+            this.contextMenu = contextMenu;
+            this.bus = session.Bus;
+
+            // Entity events
+            subs.Add(bus.Subscribe<EntityAddedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EntityRemovedEvent>(e =>
+            {
+                if (selectedEntityId == e.EntityId) selectedEntityId = null;
+                RebuildAll();
+            }));
+            subs.Add(bus.Subscribe<EntityRenamedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EntityFieldChangedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EntityFolderAddedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EntityFolderRemovedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EntityFolderRenamedEvent>(_ => RebuildAll()));
+
+            // Enum events
+            subs.Add(bus.Subscribe<EnumAddedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EnumRemovedEvent>(e =>
+            {
+                if (selectedEnumId == e.EnumId) selectedEnumId = null;
+                RebuildAll();
+            }));
+            subs.Add(bus.Subscribe<EnumRenamedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EnumMemberChangedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EnumFolderAddedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EnumFolderRemovedEvent>(_ => RebuildAll()));
+            subs.Add(bus.Subscribe<EnumFolderRenamedEvent>(_ => RebuildAll()));
+
+            RebuildAll();
+        }
+
+        public void Unbind()
+        {
+            foreach (var s in subs) s?.Dispose();
+            subs.Clear();
+        }
+
+        private CommandSystem Commands => session.ProjectCommands;
+
+        private void RebuildAll()
+        {
+            if (entityTree != null) { entityTree.SelectedItemId = selectedEntityId; entityTree.Rebuild(); }
+            if (enumTree != null) { enumTree.SelectedItemId = selectedEnumId; enumTree.Rebuild(); }
+        }
+
+        // ───────── Tree wiring ─────────
+
+        private FolderTreeView BuildEntityTree()
+        {
+            return new FolderTreeView
+            {
+                GetFolders = () => project?.Entities.Folders ?? (IReadOnlyList<string>)Array.Empty<string>(),
+                GetItems = () => project?.Entities.Entities.Cast<object>() ?? Enumerable.Empty<object>(),
+                GetItemFolder = it => ((EntityDefinition)it).FolderPath,
+                GetItemId = it => ((EntityDefinition)it).Id,
+                GetItemSearchText = it => { var e = (EntityDefinition)it; return e.Name + " " + e.FolderPath; },
+                BuildItemHeader = it => BuildEntityHeader((EntityDefinition)it),
+                BuildItemDetail = it => BuildEntityEditor((EntityDefinition)it),
+                OnItemClicked = it => SelectEntity(((EntityDefinition)it).Id, toggle: true),
+                OnItemContextMenu = (it, pos) =>
+                {
+                    var e = (EntityDefinition)it;
+                    SelectEntity(e.Id, toggle: false);
+                    contextMenu?.Open(new EntityContextTarget(this, e), pos);
+                },
+                OnFolderContextMenu = (folder, pos) =>
+                    contextMenu?.Open(new EntityFolderContextTarget(this, folder), pos),
+                OnEmptyContextMenu = (parent, pos) =>
+                    contextMenu?.Open(new EntityFolderContextTarget(this, parent), pos),
+                OnFolderRenameCommit = (oldPath, newPath) =>
+                {
+                    if (project.Entities.FolderExists(newPath))
+                    { Debug.LogWarning($"[Entities] Folder '{newPath}' already exists."); RebuildAll(); return; }
+                    Commands.Execute(new RenameEntityFolderCmd(project, bus, oldPath, newPath));
+                },
+            };
+        }
+
+        private FolderTreeView BuildEnumTree()
+        {
+            return new FolderTreeView
+            {
+                GetFolders = () => project?.Enums.Folders ?? (IReadOnlyList<string>)Array.Empty<string>(),
+                GetItems = () => project?.Enums.Enums.Cast<object>() ?? Enumerable.Empty<object>(),
+                GetItemFolder = it => ((EnumDefinition)it).FolderPath,
+                GetItemId = it => ((EnumDefinition)it).Id,
+                GetItemSearchText = it => { var e = (EnumDefinition)it; return e.Name + " " + e.FolderPath; },
+                BuildItemHeader = it => BuildEnumHeader((EnumDefinition)it),
+                BuildItemDetail = it => BuildEnumEditor((EnumDefinition)it),
+                OnItemClicked = it => SelectEnum(((EnumDefinition)it).Id, toggle: true),
+                OnItemContextMenu = (it, pos) =>
+                {
+                    var e = (EnumDefinition)it;
+                    SelectEnum(e.Id, toggle: false);
+                    contextMenu?.Open(new EnumContextTarget(this, e), pos);
+                },
+                OnFolderContextMenu = (folder, pos) =>
+                    contextMenu?.Open(new EnumFolderContextTarget(this, folder), pos),
+                OnEmptyContextMenu = (parent, pos) =>
+                    contextMenu?.Open(new EnumFolderContextTarget(this, parent), pos),
+                OnFolderRenameCommit = (oldPath, newPath) =>
+                {
+                    if (project.Enums.FolderExists(newPath))
+                    { Debug.LogWarning($"[Enums] Folder '{newPath}' already exists."); RebuildAll(); return; }
+                    Commands.Execute(new RenameEnumFolderCmd(project, bus, oldPath, newPath));
+                },
+            };
+        }
+
+        // ───────── Entity ops ─────────
+
+        public void AddEntity(string folderPath)
+        {
+            string baseName = "NewEntity";
+            string name = baseName;
+            int n = 1;
+            while (project.Entities.NameExistsInFolder(folderPath, name)) name = $"{baseName}{++n}";
+            var e = new EntityDefinition("ent_" + Guid.NewGuid().ToString("N").Substring(0, 12), name, folderPath ?? "");
+            Commands.Execute(new AddEntityCmd(project, bus, e));
+            selectedEntityId = e.Id;
+            focusNameForEntityId = e.Id;
+            RebuildAll();
+        }
+
+        public void RemoveEntity(string entityId)
+        {
+            Commands.Execute(new RemoveEntityCmd(project, bus, entityId));
+        }
+
+        public void BeginRenameEntity(string entityId)
+        {
+            selectedEntityId = entityId;
+            focusNameForEntityId = entityId;
+            RebuildAll();
+        }
+
+        public void AddEntityFolder(string parent)
+        {
+            string parentPrefix = string.IsNullOrEmpty(parent) ? "" : parent + "/";
+            string baseName = "newFolder";
+            string name = baseName;
+            int n = 1;
+            while (project.Entities.FolderExists(parentPrefix + name)) name = $"{baseName}{++n}";
+            string full = parentPrefix + name;
+            Commands.Execute(new AddEntityFolderCmd(project, bus, full));
+            if (!string.IsNullOrEmpty(parent)) entityTree.SetFolderCollapsed(parent, false);
+            entityTree.RenamingFolderPath = full;
+            entityTree.Rebuild();
+        }
+
+        public void RemoveEntityFolder(string folderPath)
+        {
+            using var tx = Commands.BeginTransaction($"Remove entity folder \"{folderPath}\"");
+            string prefix = folderPath + "/";
+            var nestedFolders = project.Entities.Folders
+                .Where(f => f != null && f.StartsWith(prefix)).ToList();
+            var allFolders = new List<string>(nestedFolders) { folderPath };
+            var inSubtree = project.Entities.Entities
+                .Where(e => e.FolderPath == folderPath
+                         || (e.FolderPath != null && e.FolderPath.StartsWith(prefix)))
+                .Select(e => e.Id).ToList();
+            foreach (var id in inSubtree) Commands.Execute(new RemoveEntityCmd(project, bus, id));
+            foreach (var f in allFolders.OrderByDescending(s => s.Length))
+                Commands.Execute(new RemoveEntityFolderCmd(project, bus, f));
+        }
+
+        public void BeginRenameEntityFolder(string folderPath)
+        {
+            if (string.IsNullOrEmpty(folderPath)) return;
+            entityTree.RenamingFolderPath = folderPath;
+            entityTree.SetFolderCollapsed(folderPath, false);
+            entityTree.Rebuild();
+        }
+
+        // ───────── Enum ops ─────────
+
+        public void AddEnum(string folderPath)
+        {
+            string baseName = "NewEnum";
+            string name = baseName;
+            int n = 1;
+            while (project.Enums.NameExistsInFolder(folderPath, name)) name = $"{baseName}{++n}";
+            var e = new EnumDefinition("enum_" + Guid.NewGuid().ToString("N").Substring(0, 12), name, folderPath ?? "");
+            // Seed with one default member so the enum is usable immediately.
+            e.Members.Add(new EnumMember("m_" + Guid.NewGuid().ToString("N").Substring(0, 8), "Value1"));
+            Commands.Execute(new AddEnumCmd(project, bus, e));
+            selectedEnumId = e.Id;
+            focusNameForEnumId = e.Id;
+            RebuildAll();
+        }
+
+        public void RemoveEnum(string enumId)
+        {
+            Commands.Execute(new RemoveEnumCmd(project, bus, enumId));
+        }
+
+        public void BeginRenameEnum(string enumId)
+        {
+            selectedEnumId = enumId;
+            focusNameForEnumId = enumId;
+            RebuildAll();
+        }
+
+        public void AddEnumFolder(string parent)
+        {
+            string parentPrefix = string.IsNullOrEmpty(parent) ? "" : parent + "/";
+            string baseName = "newFolder";
+            string name = baseName;
+            int n = 1;
+            while (project.Enums.FolderExists(parentPrefix + name)) name = $"{baseName}{++n}";
+            string full = parentPrefix + name;
+            Commands.Execute(new AddEnumFolderCmd(project, bus, full));
+            if (!string.IsNullOrEmpty(parent)) enumTree.SetFolderCollapsed(parent, false);
+            enumTree.RenamingFolderPath = full;
+            enumTree.Rebuild();
+        }
+
+        public void RemoveEnumFolder(string folderPath)
+        {
+            using var tx = Commands.BeginTransaction($"Remove enum folder \"{folderPath}\"");
+            string prefix = folderPath + "/";
+            var nestedFolders = project.Enums.Folders
+                .Where(f => f != null && f.StartsWith(prefix)).ToList();
+            var allFolders = new List<string>(nestedFolders) { folderPath };
+            var inSubtree = project.Enums.Enums
+                .Where(e => e.FolderPath == folderPath
+                         || (e.FolderPath != null && e.FolderPath.StartsWith(prefix)))
+                .Select(e => e.Id).ToList();
+            foreach (var id in inSubtree) Commands.Execute(new RemoveEnumCmd(project, bus, id));
+            foreach (var f in allFolders.OrderByDescending(s => s.Length))
+                Commands.Execute(new RemoveEnumFolderCmd(project, bus, f));
+        }
+
+        public void BeginRenameEnumFolder(string folderPath)
+        {
+            if (string.IsNullOrEmpty(folderPath)) return;
+            enumTree.RenamingFolderPath = folderPath;
+            enumTree.SetFolderCollapsed(folderPath, false);
+            enumTree.Rebuild();
+        }
+
+        // ───────── Selection ─────────
+
+        private void SelectEntity(string id, bool toggle)
+        {
+            if (toggle && selectedEntityId == id) selectedEntityId = null;
+            else selectedEntityId = id;
+            RebuildAll();
+        }
+
+        private void SelectEnum(string id, bool toggle)
+        {
+            if (toggle && selectedEnumId == id) selectedEnumId = null;
+            else selectedEnumId = id;
+            RebuildAll();
+        }
+
+        // ───────── Header builders ─────────
+
+        private VisualElement BuildSectionHeader(string title, Action onAdd)
+        {
+            var header = new VisualElement();
+            header.AddToClassList("nt-vars-section");
+            var lbl = new Label(title);
+            lbl.AddToClassList("nt-vars-section-label");
+            header.Add(lbl);
+            var add = new Button(onAdd) { text = "+" };
+            add.AddToClassList("nt-vars-add-btn");
+            header.Add(add);
+            return header;
+        }
+
+        private VisualElement BuildEntityHeader(EntityDefinition e)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("nt-vars-row");
+
+            var swatch = new VisualElement();
+            swatch.AddToClassList("nt-vars-swatch");
+            swatch.AddToClassList("nt-vars-swatch--entity");
+            row.Add(swatch);
+
+            var name = new Label(e.Name);
+            name.AddToClassList("nt-vars-name");
+            row.Add(name);
+
+            var badge = new Label($"{e.Fields.Count} field{(e.Fields.Count == 1 ? "" : "s")}");
+            badge.AddToClassList("nt-vars-type-badge");
+            row.Add(badge);
+            return row;
+        }
+
+        private VisualElement BuildEnumHeader(EnumDefinition e)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("nt-vars-row");
+
+            var swatch = new VisualElement();
+            swatch.AddToClassList("nt-vars-swatch");
+            swatch.AddToClassList("nt-vars-swatch--enum");
+            row.Add(swatch);
+
+            var name = new Label(e.Name);
+            name.AddToClassList("nt-vars-name");
+            row.Add(name);
+
+            var badge = new Label($"{e.Members.Count} value{(e.Members.Count == 1 ? "" : "s")}");
+            badge.AddToClassList("nt-vars-type-badge");
+            row.Add(badge);
+            return row;
+        }
+
+        // ───────── Entity inline editor ─────────
+
+        private VisualElement BuildEntityEditor(EntityDefinition e)
+        {
+            var editor = new VisualElement();
+            editor.AddToClassList("nt-vars-editor");
+
+            var nameRow = BuildEditorRow("Name");
+            var nameField = new TextField { value = e.Name };
+            nameField.AddToClassList("nt-vars-input");
+            nameField.RegisterCallback<BlurEvent>(_ => CommitEntityRename(e, nameField.value));
+            nameField.RegisterCallback<KeyDownEvent>(ev =>
+            {
+                if (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter)
+                { CommitEntityRename(e, nameField.value); ev.StopPropagation(); }
+                else if (ev.keyCode == KeyCode.Escape)
+                { nameField.SetValueWithoutNotify(e.Name); Focus(); ev.StopPropagation(); }
+            });
+            nameRow.Add(nameField);
+            editor.Add(nameRow);
+
+            if (focusNameForEntityId == e.Id)
+            {
+                focusNameForEntityId = null;
+                nameField.schedule.Execute(() => { nameField.Focus(); nameField.SelectAll(); }).StartingIn(0);
+            }
+
+            // Fields header
+            var fieldsHdr = new Label("Fields");
+            fieldsHdr.AddToClassList("nt-vars-editor-label");
+            fieldsHdr.style.marginTop = 6;
+            editor.Add(fieldsHdr);
+
+            // Each field row
+            foreach (var f in e.Fields)
+                editor.Add(BuildFieldRow(e, f));
+
+            // Add field button
+            var addFieldBtn = new Button(() => AddField(e)) { text = "+ Add field" };
+            addFieldBtn.AddToClassList("nt-vars-input");
+            editor.Add(addFieldBtn);
+
+            return editor;
+        }
+
+        private VisualElement BuildFieldRow(EntityDefinition e, EntityField f)
+        {
+            var box = new VisualElement();
+            box.AddToClassList("nt-vars-field-box");
+
+            // Top: name + remove
+            var topRow = new VisualElement();
+            topRow.AddToClassList("nt-vars-field-toprow");
+            var fname = new TextField { value = f.Name };
+            fname.AddToClassList("nt-vars-input");
+            fname.RegisterCallback<BlurEvent>(_ => CommitFieldRename(e, f, fname.value));
+            fname.RegisterCallback<KeyDownEvent>(ev =>
+            {
+                if (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter)
+                { CommitFieldRename(e, f, fname.value); ev.StopPropagation(); }
+            });
+            topRow.Add(fname);
+            var rm = new Button(() => Commands.Execute(new RemoveEntityFieldCmd(project, bus, e.Id, f.Id))) { text = "✕" };
+            rm.AddToClassList("nt-option-remove-btn");
+            topRow.Add(rm);
+            box.Add(topRow);
+
+            // Type
+            var typeChoices = Enum.GetNames(typeof(VariableType)).ToList();
+            var typeDD = new DropdownField(typeChoices, (int)f.Type);
+            typeDD.AddToClassList("nt-vars-input");
+            typeDD.RegisterValueChangedCallback(evt =>
+            {
+                if (!Enum.TryParse<VariableType>(evt.newValue, out var t)) return;
+                if (t == f.Type) return;
+                Commands.Execute(new SetEntityFieldTypeCmd(project, bus, e.Id, f.Id,
+                    f.Type, t, f.DefaultValue, f.EnumTypeId));
+            });
+            box.Add(typeDD);
+
+            // Enum picker (when Type == Enum)
+            if (f.Type == VariableType.Enum)
+                box.Add(BuildFieldEnumPicker(e, f));
+
+            // Default
+            box.Add(BuildFieldDefaultInput(e, f));
+            return box;
+        }
+
+        private VisualElement BuildFieldEnumPicker(EntityDefinition e, EntityField f)
+        {
+            var enums = project.Enums.Enums;
+            if (enums.Count == 0)
+            {
+                var msg = new Label("(no enums defined)");
+                msg.AddToClassList("nt-vars-input"); return msg;
+            }
+            var names = enums.Select(en => en.Name).ToList();
+            int currentIdx = enums.FindIndex(en => en.Id == f.EnumTypeId);
+            var dd = new DropdownField(names, Mathf.Max(0, currentIdx));
+            dd.AddToClassList("nt-vars-input");
+            dd.RegisterValueChangedCallback(evt =>
+            {
+                int idx = names.IndexOf(evt.newValue);
+                if (idx < 0) return;
+                string newId = enums[idx].Id;
+                if (newId == f.EnumTypeId) return;
+                Commands.Execute(new SetEntityFieldEnumTypeCmd(project, bus, e.Id, f.Id,
+                    f.EnumTypeId, newId, f.DefaultValue));
+            });
+            return dd;
+        }
+
+        private VisualElement BuildFieldDefaultInput(EntityDefinition e, EntityField f)
+        {
+            switch (f.Type)
+            {
+                case VariableType.Int:
+                {
+                    var fld = new IntegerField { value = f.DefaultValue is int i ? i : 0 };
+                    fld.AddToClassList("nt-vars-input");
+                    fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
+                    return fld;
+                }
+                case VariableType.Float:
+                {
+                    var fld = new FloatField { value = f.DefaultValue is float fv ? fv : 0f };
+                    fld.AddToClassList("nt-vars-input");
+                    fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
+                    return fld;
+                }
+                case VariableType.Bool:
+                {
+                    var fld = new Toggle { value = f.DefaultValue is bool b && b };
+                    fld.AddToClassList("nt-vars-input");
+                    fld.RegisterValueChangedCallback(evt => CommitFieldDefault(e, f, evt.newValue));
+                    return fld;
+                }
+                case VariableType.String:
+                {
+                    var fld = new TextField { value = f.DefaultValue as string ?? "" };
+                    fld.AddToClassList("nt-vars-input");
+                    fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
+                    return fld;
+                }
+                case VariableType.Enum:
+                {
+                    var en = project.Enums.Find(f.EnumTypeId);
+                    if (en == null || en.Members.Count == 0)
+                    {
+                        var msg = new Label(en == null ? "(pick an enum first)" : "(enum has no members)");
+                        msg.AddToClassList("nt-vars-input"); return msg;
+                    }
+                    var memberNames = en.Members.Select(m => m.Name).ToList();
+                    int idx = en.Members.FindIndex(m => m.Id == (f.DefaultValue as string));
+                    var dd = new DropdownField(memberNames, Mathf.Max(0, idx));
+                    dd.AddToClassList("nt-vars-input");
+                    dd.RegisterValueChangedCallback(evt =>
+                    {
+                        int sel = memberNames.IndexOf(evt.newValue);
+                        if (sel < 0) return;
+                        CommitFieldDefault(e, f, en.Members[sel].Id);
+                    });
+                    return dd;
+                }
+                default:
+                    return new Label("(unsupported)");
+            }
+        }
+
+        private void AddField(EntityDefinition e)
+        {
+            string baseName = "field";
+            string name = baseName;
+            int n = 1;
+            while (project.Entities.FieldNameExists(e, name)) name = $"{baseName}{++n}";
+            var f = new EntityField("f_" + Guid.NewGuid().ToString("N").Substring(0, 12),
+                                    name, VariableType.Int, VariableStore.DefaultFor(VariableType.Int));
+            Commands.Execute(new AddEntityFieldCmd(project, bus, e.Id, f));
+        }
+
+        private void CommitEntityRename(EntityDefinition e, string newName)
+        {
+            newName = (newName ?? "").Trim();
+            if (string.IsNullOrEmpty(newName) || newName == e.Name) return;
+            if (project.Entities.NameExistsInFolder(e.FolderPath, newName, excludeId: e.Id))
+            { Debug.LogWarning($"[Entities] Name '{newName}' already exists in folder '{e.FolderPath}'."); return; }
+            Commands.Execute(new RenameEntityCmd(project, bus, e.Id, e.Name, newName));
+        }
+
+        private void CommitFieldRename(EntityDefinition e, EntityField f, string newName)
+        {
+            newName = (newName ?? "").Trim();
+            if (string.IsNullOrEmpty(newName) || newName == f.Name) return;
+            if (project.Entities.FieldNameExists(e, newName, excludeId: f.Id))
+            { Debug.LogWarning($"[Entities] Field name '{newName}' already exists on '{e.Name}'."); return; }
+            Commands.Execute(new RenameEntityFieldCmd(project, bus, e.Id, f.Id, f.Name, newName));
+        }
+
+        private void CommitFieldDefault(EntityDefinition e, EntityField f, object value)
+        {
+            if (Equals(f.DefaultValue, value)) return;
+            Commands.Execute(new SetEntityFieldDefaultCmd(project, bus, e.Id, f.Id, f.DefaultValue, value));
+        }
+
+        // ───────── Enum inline editor ─────────
+
+        private VisualElement BuildEnumEditor(EnumDefinition e)
+        {
+            var editor = new VisualElement();
+            editor.AddToClassList("nt-vars-editor");
+
+            var nameRow = BuildEditorRow("Name");
+            var nameField = new TextField { value = e.Name };
+            nameField.AddToClassList("nt-vars-input");
+            nameField.RegisterCallback<BlurEvent>(_ => CommitEnumRename(e, nameField.value));
+            nameField.RegisterCallback<KeyDownEvent>(ev =>
+            {
+                if (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter)
+                { CommitEnumRename(e, nameField.value); ev.StopPropagation(); }
+                else if (ev.keyCode == KeyCode.Escape)
+                { nameField.SetValueWithoutNotify(e.Name); Focus(); ev.StopPropagation(); }
+            });
+            nameRow.Add(nameField);
+            editor.Add(nameRow);
+
+            if (focusNameForEnumId == e.Id)
+            {
+                focusNameForEnumId = null;
+                nameField.schedule.Execute(() => { nameField.Focus(); nameField.SelectAll(); }).StartingIn(0);
+            }
+
+            var membersHdr = new Label("Members");
+            membersHdr.AddToClassList("nt-vars-editor-label");
+            membersHdr.style.marginTop = 6;
+            editor.Add(membersHdr);
+
+            foreach (var m in e.Members)
+                editor.Add(BuildMemberRow(e, m));
+
+            var addMemberBtn = new Button(() => AddMember(e)) { text = "+ Add member" };
+            addMemberBtn.AddToClassList("nt-vars-input");
+            editor.Add(addMemberBtn);
+
+            return editor;
+        }
+
+        private VisualElement BuildMemberRow(EnumDefinition e, EnumMember m)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("nt-vars-field-toprow");
+            var nameField = new TextField { value = m.Name };
+            nameField.AddToClassList("nt-vars-input");
+            nameField.RegisterCallback<BlurEvent>(_ => CommitMemberRename(e, m, nameField.value));
+            nameField.RegisterCallback<KeyDownEvent>(ev =>
+            {
+                if (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter)
+                { CommitMemberRename(e, m, nameField.value); ev.StopPropagation(); }
+            });
+            row.Add(nameField);
+            var rm = new Button(() => Commands.Execute(new RemoveEnumMemberCmd(project, bus, e.Id, m.Id))) { text = "✕" };
+            rm.AddToClassList("nt-option-remove-btn");
+            row.Add(rm);
+            return row;
+        }
+
+        private void AddMember(EnumDefinition e)
+        {
+            string baseName = "Value";
+            string name = baseName + (e.Members.Count + 1);
+            int n = 1;
+            while (project.Enums.MemberNameExists(e, name)) name = $"{baseName}{e.Members.Count + 1 + n++}";
+            var m = new EnumMember("m_" + Guid.NewGuid().ToString("N").Substring(0, 8), name);
+            Commands.Execute(new AddEnumMemberCmd(project, bus, e.Id, m));
+        }
+
+        private void CommitEnumRename(EnumDefinition e, string newName)
+        {
+            newName = (newName ?? "").Trim();
+            if (string.IsNullOrEmpty(newName) || newName == e.Name) return;
+            if (project.Enums.NameExistsInFolder(e.FolderPath, newName, excludeId: e.Id))
+            { Debug.LogWarning($"[Enums] Name '{newName}' already exists in folder '{e.FolderPath}'."); return; }
+            Commands.Execute(new RenameEnumCmd(project, bus, e.Id, e.Name, newName));
+        }
+
+        private void CommitMemberRename(EnumDefinition e, EnumMember m, string newName)
+        {
+            newName = (newName ?? "").Trim();
+            if (string.IsNullOrEmpty(newName) || newName == m.Name) return;
+            if (project.Enums.MemberNameExists(e, newName, excludeId: m.Id))
+            { Debug.LogWarning($"[Enums] Member '{newName}' already exists on '{e.Name}'."); return; }
+            Commands.Execute(new RenameEnumMemberCmd(project, bus, e.Id, m.Id, m.Name, newName));
+        }
+
+        private static VisualElement BuildEditorRow(string label)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("nt-vars-editor-row");
+            var lbl = new Label(label);
+            lbl.AddToClassList("nt-vars-editor-label");
+            row.Add(lbl);
+            return row;
+        }
+
+        private void OnKeyDown(KeyDownEvent e)
+        {
+            if (Commands == null) return;
+            bool ctrl = e.ctrlKey || e.commandKey;
+            if (ctrl && e.keyCode == KeyCode.Z)
+            {
+                if (e.shiftKey) Commands.Redo();
+                else Commands.Undo();
+                e.StopPropagation();
+            }
+        }
+    }
+
+    // ───────── Context-menu targets ─────────
+
+    public sealed class EntityContextTarget
+    {
+        public EntitiesPanel Panel { get; }
+        public EntityDefinition Entity { get; }
+        public EntityContextTarget(EntitiesPanel p, EntityDefinition e) { Panel = p; Entity = e; }
+    }
+
+    public sealed class EntityFolderContextTarget
+    {
+        public EntitiesPanel Panel { get; }
+        public string FolderPath { get; }
+        public EntityFolderContextTarget(EntitiesPanel p, string f) { Panel = p; FolderPath = f ?? ""; }
+    }
+
+    public sealed class EnumContextTarget
+    {
+        public EntitiesPanel Panel { get; }
+        public EnumDefinition Enum { get; }
+        public EnumContextTarget(EntitiesPanel p, EnumDefinition e) { Panel = p; Enum = e; }
+    }
+
+    public sealed class EnumFolderContextTarget
+    {
+        public EntitiesPanel Panel { get; }
+        public string FolderPath { get; }
+        public EnumFolderContextTarget(EntitiesPanel p, string f) { Panel = p; FolderPath = f ?? ""; }
+    }
+}
