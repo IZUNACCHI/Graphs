@@ -163,6 +163,7 @@ namespace NarrativeTool.Canvas.Views
             pv.RemoveFromHierarchy();
             row.Add(pv); // positioned absolutely via USS
 
+            RefreshSortArrows();
             ScheduleEdgeRefresh();
         }
 
@@ -177,6 +178,7 @@ namespace NarrativeTool.Canvas.Views
                     pv.RemoveFromHierarchy();
                     portViews.Remove(option.PortId);
                 }
+                RefreshSortArrows();
                 ScheduleEdgeRefresh();
             }
         }
@@ -189,6 +191,20 @@ namespace NarrativeTool.Canvas.Views
             var data = (ChoiceNodeData)Node;
             for (int i = 0; i < data.Options.Count; i++)
                 AddOptionRow(data.Options[i], i);
+        }
+
+        private void RefreshSortArrows()
+        {
+            var data = (ChoiceNodeData)Node;
+            int last = data.Options.Count - 1;
+            for (int i = 0; i < data.Options.Count; i++)
+            {
+                if (!optionRows.TryGetValue(data.Options[i], out var row)) continue;
+                var btns = row.Query<Button>(className: "nt-option-sort-btn").ToList();
+                if (btns.Count < 2) continue;
+                btns[0].SetEnabled(i > 0);
+                btns[1].SetEnabled(i < last);
+            }
         }
 
         private void ScheduleEdgeRefresh()
