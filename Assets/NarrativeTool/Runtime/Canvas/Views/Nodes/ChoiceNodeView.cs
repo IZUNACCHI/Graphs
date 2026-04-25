@@ -44,7 +44,7 @@ namespace NarrativeTool.Canvas.Views
             var rightLine = new VisualElement();
             rightLine.AddToClassList("nt-preamble-toggle-line");
 
-            preambleToggleBtn = new Button(TogglePreamble) { text = "▾ Preamble" };
+            preambleToggleBtn = new Button(TogglePreamble) { text = "▾ Show Line" };
             preambleToggleBtn.AddToClassList("nt-preamble-toggle-btn");
             preambleToggleSection.Add(leftLine);
             preambleToggleSection.Add(preambleToggleBtn);
@@ -190,7 +190,7 @@ namespace NarrativeTool.Canvas.Views
             var sortCol = new VisualElement();
             sortCol.AddToClassList("nt-option-sort");
             var upBtn = new Button(() => MoveOption(option, -1));
-            upBtn.text = "$";
+            upBtn.text = "▲";
             upBtn.AddToClassList("nt-option-sort-btn");
             upBtn.SetEnabled(index > 0);
             sortCol.Add(upBtn);
