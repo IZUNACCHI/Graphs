@@ -11,6 +11,8 @@ namespace NarrativeTool.Data.Project
 
         public List<GraphData> Graphs { get; } = new();
 
+        public VariableStore Variables { get; } = new();
+
         public GraphData FindGraph(string id)
         {
             foreach (var g in Graphs) if (g.Id == id) return g;

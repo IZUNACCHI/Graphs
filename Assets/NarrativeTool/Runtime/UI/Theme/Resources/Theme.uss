@@ -614,3 +614,141 @@
     border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
     position: absolute;
 }
+
+/* ---------- Variables panel ---------- */
+.nt-vars {
+    width: 200px;
+    background-color: #202020;
+    border-right-width: 1px;
+    border-right-color: #333;
+    flex-shrink: 0;
+    flex-direction: column;
+}
+.nt-vars-tabs {
+    flex-direction: row;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+}
+.nt-vars-tab {
+    flex-grow: 1;
+    color: #555;
+    font-size: 10px;
+    padding-top: 5px; padding-bottom: 5px;
+    -unity-text-align: middle-center;
+}
+.nt-vars-tab--active {
+    color: #7dcfa0;
+    background-color: #1e2e24;
+    border-bottom-width: 2px;
+    border-bottom-color: #4a9a6a;
+}
+.nt-vars-tab--disabled { color: #3a3a3a; }
+
+.nt-vars-filter-row {
+    flex-direction: row;
+    padding-top: 3px; padding-bottom: 3px;
+    padding-left: 5px; padding-right: 5px;
+    border-bottom-width: 1px;
+    border-bottom-color: #1a1a1a;
+}
+.nt-vars-filter {
+    flex-grow: 1;
+    margin-right: 3px;
+    font-size: 10px;
+}
+.nt-vars-filter > .unity-text-field__input {
+    background-color: #1a1a1a;
+    border-color: #2a2a2a;
+    color: #888;
+}
+.nt-vars-add-btn {
+    background-color: #1c1c1c;
+    border-color: #2a2a2a;
+    color: #888;
+    font-size: 10px;
+    width: 22px;
+    margin-left: 0; margin-right: 0;
+}
+
+.nt-vars-scroll { flex-grow: 1; }
+.nt-vars-list { padding-top: 2px; padding-bottom: 2px; }
+
+.nt-vars-folder {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 6px; padding-right: 6px;
+    padding-top: 2px;  padding-bottom: 2px;
+}
+.nt-vars-folder-caret {
+    color: #555;
+    font-size: 9px;
+    width: 10px;
+}
+.nt-vars-folder-label {
+    color: #777;
+    font-size: 10px;
+    margin-left: 3px;
+}
+
+.nt-vars-row {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 6px; padding-right: 6px;
+    padding-top: 2px;  padding-bottom: 2px;
+    margin-left: 3px; margin-right: 3px;
+    border-top-left-radius: 3px;    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+}
+.nt-vars-row--indented { padding-left: 18px; }
+.nt-vars-row--selected { background-color: #2a2a2a; }
+
+.nt-vars-swatch {
+    width: 6px; height: 6px;
+    margin-right: 5px;
+    background-color: #2d6aa0;
+}
+.nt-vars-swatch--int    { background-color: #2d6aa0; }
+.nt-vars-swatch--float  { background-color: #2d8a6a; }
+.nt-vars-swatch--bool   { background-color: #a06a30; }
+.nt-vars-swatch--string { background-color: #8b4090; }
+
+.nt-vars-name {
+    color: #b8b8b8;
+    font-size: 10px;
+    flex-grow: 1;
+}
+.nt-vars-rename-input {
+    flex-grow: 1;
+    font-size: 10px;
+    margin-right: 4px;
+}
+.nt-vars-type-badge {
+    font-size: 9px;
+    color: #666;
+    background-color: #1c1c1c;
+    border-color: #2a2a2a;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-top-left-radius: 2px;    border-top-right-radius: 2px;
+    border-bottom-left-radius: 2px; border-bottom-right-radius: 2px;
+    padding-left: 3px; padding-right: 3px;
+}
+
+/* Inline editor below the list when a variable is selected */
+.nt-vars-editor {
+    border-top-width: 1px;
+    border-top-color: #2a2a2a;
+    padding-top: 4px; padding-bottom: 6px;
+    padding-left: 8px; padding-right: 8px;
+    background-color: #1c1c1c;
+}
+.nt-vars-editor-row {
+    flex-direction: column;
+    margin-bottom: 3px;
+}
+.nt-vars-editor-label {
+    color: #555;
+    font-size: 9px;
+    margin-bottom: 2px;
+}
+.nt-vars-input { font-size: 10px; }

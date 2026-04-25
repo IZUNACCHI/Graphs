@@ -25,8 +25,18 @@ namespace NarrativeTool.Data.Project
         private readonly EventBus bus;
         private readonly Dictionary<GraphData, CommandSystem> commandsByGraph = new();
         private readonly Dictionary<GraphData, SelectionService> selectionByGraph = new();
+        private CommandSystem projectCommands;
 
         public EventBus Bus => bus;
+        public ProjectModel Project { get; set; }
+
+        /// <summary>
+        /// Undo stack for project-scoped operations (variables, entities,
+        /// future global rename refactors). Independent from per-graph
+        /// stacks so editing a variable doesn't pollute a graph's history.
+        /// </summary>
+        public CommandSystem ProjectCommands
+            => projectCommands ??= new CommandSystem();
 
         public SessionState(EventBus bus)
         {
@@ -62,6 +72,8 @@ namespace NarrativeTool.Data.Project
         {
             commandsByGraph.Clear();
             selectionByGraph.Clear();
+            projectCommands = null;
+            Project = null;
         }
     }
 }
