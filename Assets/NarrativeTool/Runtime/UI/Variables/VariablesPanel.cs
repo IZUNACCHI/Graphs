@@ -38,7 +38,7 @@ namespace NarrativeTool.UI.Variables
         private string focusNameForId;
 
         private IDisposable subAdded, subRemoved, subRenamed, subTypeChanged, subDefaultChanged, subMoved;
-        private IDisposable subFolderAdded, subFolderRemoved, subFolderRenamed;
+        private IDisposable subFolderAdded, subFolderRemoved, subFolderRenamed, subEnumTypeChanged;
 
         public VariablesPanel()
         {
@@ -144,6 +144,7 @@ namespace NarrativeTool.UI.Variables
             subFolderAdded = bus.Subscribe<VariableFolderAddedEvent>(_ => Rebuild());
             subFolderRemoved = bus.Subscribe<VariableFolderRemovedEvent>(_ => Rebuild());
             subFolderRenamed = bus.Subscribe<VariableFolderRenamedEvent>(_ => Rebuild());
+            subEnumTypeChanged = bus.Subscribe<VariableEnumTypeChangedEvent>(_ => Rebuild());
 
             Rebuild();
         }
@@ -159,6 +160,7 @@ namespace NarrativeTool.UI.Variables
             subFolderAdded?.Dispose(); subFolderAdded = null;
             subFolderRemoved?.Dispose(); subFolderRemoved = null;
             subFolderRenamed?.Dispose(); subFolderRenamed = null;
+            subEnumTypeChanged?.Dispose(); subEnumTypeChanged = null;
         }
 
         private CommandSystem Commands => session.ProjectCommands;
@@ -342,10 +344,19 @@ namespace NarrativeTool.UI.Variables
             {
                 if (!Enum.TryParse<VariableType>(evt.newValue, out var t)) return;
                 if (t == v.Type) return;
-                Commands.Execute(new SetVariableTypeCmd(project, bus, v.Id, v.Type, t, v.DefaultValue));
+                Commands.Execute(new SetVariableTypeCmd(project, bus, v.Id, v.Type, t,
+                                                        v.DefaultValue, v.EnumTypeId));
             });
             typeRow.Add(typeField);
             editor.Add(typeRow);
+
+            // Enum type picker (only when Type == Enum)
+            if (v.Type == VariableType.Enum)
+            {
+                var enumRow = BuildEditorRow("Enum");
+                enumRow.Add(BuildEnumTypePicker(v));
+                editor.Add(enumRow);
+            }
 
             // Default
             var defRow = BuildEditorRow("Default");
@@ -353,6 +364,32 @@ namespace NarrativeTool.UI.Variables
             editor.Add(defRow);
 
             return editor;
+        }
+
+        private VisualElement BuildEnumTypePicker(VariableDefinition v)
+        {
+            var enums = project.Enums.Enums;
+            if (enums.Count == 0)
+            {
+                var msg = new Label("(no enums defined)");
+                msg.AddToClassList("nt-vars-input");
+                return msg;
+            }
+
+            var names = enums.Select(e => e.Name).ToList();
+            int currentIdx = enums.FindIndex(e => e.Id == v.EnumTypeId);
+            var dd = new DropdownField(names, Mathf.Max(0, currentIdx));
+            dd.AddToClassList("nt-vars-input");
+            dd.RegisterValueChangedCallback(evt =>
+            {
+                int idx = names.IndexOf(evt.newValue);
+                if (idx < 0) return;
+                string newId = enums[idx].Id;
+                if (newId == v.EnumTypeId) return;
+                Commands.Execute(new SetVariableEnumTypeCmd(project, bus, v.Id,
+                                                            v.EnumTypeId, newId, v.DefaultValue));
+            });
+            return dd;
         }
 
         private VisualElement BuildDefaultInput(VariableDefinition v)
@@ -386,6 +423,29 @@ namespace NarrativeTool.UI.Variables
                     f.AddToClassList("nt-vars-input");
                     f.RegisterCallback<BlurEvent>(_ => CommitDefault(v, f.value));
                     return f;
+                }
+                case VariableType.Enum:
+                {
+                    var enumDef = project.Enums.Find(v.EnumTypeId);
+                    if (enumDef == null || enumDef.Members.Count == 0)
+                    {
+                        var msg = new Label(enumDef == null
+                            ? "(pick an enum first)"
+                            : "(enum has no members)");
+                        msg.AddToClassList("nt-vars-input");
+                        return msg;
+                    }
+                    var memberNames = enumDef.Members.Select(m => m.Name).ToList();
+                    int idx = enumDef.Members.FindIndex(m => m.Id == (v.DefaultValue as string));
+                    var dd = new DropdownField(memberNames, Mathf.Max(0, idx));
+                    dd.AddToClassList("nt-vars-input");
+                    dd.RegisterValueChangedCallback(evt =>
+                    {
+                        int sel = memberNames.IndexOf(evt.newValue);
+                        if (sel < 0) return;
+                        CommitDefault(v, enumDef.Members[sel].Id);
+                    });
+                    return dd;
                 }
                 default:
                     return new Label("(unsupported type)");

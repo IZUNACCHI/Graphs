@@ -23,26 +23,37 @@ namespace NarrativeTool.Core.Commands
         private readonly VariableType newType;
         private readonly object oldDefault;
         private readonly object newDefault;
+        private readonly string oldEnumTypeId;   // captured so undo restores it
+        private readonly string newEnumTypeId;
 
         public SetVariableTypeCmd(ProjectModel project, EventBus bus, string variableId,
-                                  VariableType oldType, VariableType newType, object oldDefault)
+                                  VariableType oldType, VariableType newType,
+                                  object oldDefault, string oldEnumTypeId)
         {
             this.project = project; this.bus = bus; this.variableId = variableId;
             this.oldType = oldType; this.newType = newType;
             this.oldDefault = oldDefault;
+            this.oldEnumTypeId = oldEnumTypeId;
+            // Switching to/from Enum always clears the EnumTypeId; the user
+            // re-selects an enum via SetVariableEnumTypeCmd.
+            this.newEnumTypeId = null;
             this.newDefault = VariableStore.DefaultFor(newType);
         }
 
-        public void Do() => Apply(newType, newDefault, oldType);
-        public void Undo() => Apply(oldType, oldDefault, newType);
+        public void Do() => Apply(newType, newDefault, newEnumTypeId, oldType, oldEnumTypeId);
+        public void Undo() => Apply(oldType, oldDefault, oldEnumTypeId, newType, newEnumTypeId);
 
-        private void Apply(VariableType type, object defaultVal, VariableType from)
+        private void Apply(VariableType type, object defaultVal, string enumTypeId,
+                           VariableType from, string fromEnumTypeId)
         {
             var v = project.Variables.Find(variableId);
             if (v == null) return;
             v.Type = type;
             v.DefaultValue = defaultVal;
+            v.EnumTypeId = enumTypeId;
             bus.Publish(new VariableTypeChangedEvent(project.Id, variableId, from, type));
+            if (fromEnumTypeId != enumTypeId)
+                bus.Publish(new VariableEnumTypeChangedEvent(project.Id, variableId, fromEnumTypeId, enumTypeId));
             bus.Publish(new VariableDefaultChangedEvent(project.Id, variableId));
         }
 

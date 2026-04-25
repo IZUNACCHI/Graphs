@@ -16,18 +16,23 @@ namespace NarrativeTool.Data.Project
         public VariableType Type { get; set; }
         public object DefaultValue { get; set; }         // boxed; type matches Type
 
+        // Only meaningful when Type == Enum. Refers to EnumDefinition.Id on
+        // ProjectModel.Enums. When set, DefaultValue is an EnumMember.Id
+        // (string). Null/empty for non-enum types.
+        public string EnumTypeId { get; set; }
+
         // "" = root; "/"-delimited for nested folders, e.g. "player/stats".
-        // Folders are implicit (derived by grouping definitions). No separate
-        // folder objects; rename of a folder = bulk path edit on its members.
         public string FolderPath { get; set; } = "";
 
-        public VariableDefinition(string id, string name, VariableType type, object defaultValue, string folderPath = "")
+        public VariableDefinition(string id, string name, VariableType type, object defaultValue,
+                                  string folderPath = "", string enumTypeId = null)
         {
             Id = id;
             Name = name;
             Type = type;
             DefaultValue = defaultValue;
             FolderPath = folderPath ?? "";
+            EnumTypeId = enumTypeId;
         }
     }
 
@@ -37,7 +42,6 @@ namespace NarrativeTool.Data.Project
         Float,
         Bool,
         String,
-        // TODO scripting: enum-typed variables. Will need a separate store of
-        // enum type definitions (name + members) referenced here by id.
+        Enum,
     }
 }

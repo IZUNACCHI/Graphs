@@ -12,6 +12,7 @@ namespace NarrativeTool.Data.Project
         public List<GraphData> Graphs { get; } = new();
 
         public VariableStore Variables { get; } = new();
+        public EnumStore Enums { get; } = new();
 
         public GraphData FindGraph(string id)
         {

@@ -54,6 +54,17 @@ namespace NarrativeTool.Core.EventSystem
         public override string ToString() => $"{{ Var={VariableId} default changed }}";
     }
 
+    public readonly struct VariableEnumTypeChangedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string VariableId;
+        public readonly string OldEnumTypeId;
+        public readonly string NewEnumTypeId;
+        public VariableEnumTypeChangedEvent(string projectId, string variableId, string oldEnumTypeId, string newEnumTypeId)
+        { ProjectId = projectId; VariableId = variableId; OldEnumTypeId = oldEnumTypeId; NewEnumTypeId = newEnumTypeId; }
+        public override string ToString() => $"{{ Var={VariableId}, enum {OldEnumTypeId} -> {NewEnumTypeId} }}";
+    }
+
     public readonly struct VariableMovedEvent
     {
         public readonly string ProjectId;
