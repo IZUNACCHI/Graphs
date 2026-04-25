@@ -116,6 +116,17 @@ namespace NarrativeTool.Canvas.Views
         private void ConfirmRemoveOption(ChoiceOption option, int idx)
         {
             var data = (ChoiceNodeData)Node;
+            using var tx = Canvas.Commands.BeginTransaction("Remove choice option");
+
+            // Remove any edges connected to this option's port before removing the option
+            var connectedEdges = Canvas.Graph.Edges
+                .Where(e => (e.FromNodeId == Node.Id && e.FromPortId == option.PortId)
+                         || (e.ToNodeId == Node.Id && e.ToPortId == option.PortId))
+                .Select(e => e.Id)
+                .ToList();
+            foreach (var edgeId in connectedEdges)
+                Canvas.Commands.Execute(new RemoveEdgeCmd(Canvas.Graph, Canvas.Bus, edgeId));
+
             Canvas.Commands.Execute(new RemoveChoiceOptionCmd(data, idx, option,
                 onDo: () => RemoveOptionRow(option),
                 onUndo: () => AddOptionRow(option, idx)));
@@ -145,8 +156,14 @@ namespace NarrativeTool.Canvas.Views
                     PortDirection.Output, PortCapacity.Single, "flow");
                 var portView = new PortView(portData) { OwnerNode = this };
                 portViews[option.PortId] = portView;
-                row.Add(portView); // positioned absolutely via USS
+                portView.RegisterCallback<GeometryChangedEvent>(_ => ScheduleEdgeRefresh());
             }
+            // Always re-parent: handles the case where the base NodeView added it to outputsColumn
+            var pv = portViews[option.PortId];
+            pv.RemoveFromHierarchy();
+            row.Add(pv); // positioned absolutely via USS
+
+            ScheduleEdgeRefresh();
         }
 
         private void RemoveOptionRow(ChoiceOption option)
@@ -160,6 +177,7 @@ namespace NarrativeTool.Canvas.Views
                     pv.RemoveFromHierarchy();
                     portViews.Remove(option.PortId);
                 }
+                ScheduleEdgeRefresh();
             }
         }
 
@@ -167,11 +185,15 @@ namespace NarrativeTool.Canvas.Views
         {
             optionsList.Clear();
             optionRows.Clear();
+            // Keep portViews in dict so AddOptionRow can re-parent rather than recreate
             var data = (ChoiceNodeData)Node;
-            foreach (var opt in data.Options)
-                portViews.Remove(opt.PortId);
             for (int i = 0; i < data.Options.Count; i++)
                 AddOptionRow(data.Options[i], i);
+        }
+
+        private void ScheduleEdgeRefresh()
+        {
+            schedule.Execute(() => Canvas?.EdgeLayer.RefreshEdgesForNode(Node.Id)).ExecuteLater(0);
         }
 
         private VisualElement BuildOptionRow(ChoiceOption option, int index)
