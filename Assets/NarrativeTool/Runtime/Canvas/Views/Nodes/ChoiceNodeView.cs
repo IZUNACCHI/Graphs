@@ -2,6 +2,7 @@
 using NarrativeTool.Core.Widgets;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -81,7 +82,7 @@ namespace NarrativeTool.Canvas.Views
             var old = data.HasPreamble;
             var next = !old;
             Canvas.Commands.Execute(new SetPropertyCommand("HasPreamble",
-                v => data.HasPreamble = (bool)v, old, next, Canvas.Bus, Canvas.Graph?.Id));
+                v => data.HasPreamble = (bool)v, old, next, Canvas.Bus));
             UpdatePreambleUI();
         }
 
@@ -98,12 +99,7 @@ namespace NarrativeTool.Canvas.Views
         {
             var data = (ChoiceNodeData)Node;
             int idx = data.Options.Count;
-            var opt = new ChoiceOption
-            {
-                Id = $"opt_{Guid.NewGuid():N}".Substring(0, 8),
-                Label = "New Option",
-                PortId = $"out_{idx}"
-            };
+            var opt = ChoiceNodeData.MakeOption("New Option");
             Canvas.Commands.Execute(new AddChoiceOptionCmd(data, idx, opt,
                 onDo: () => AddOptionRow(opt, idx),
                 onUndo: () => RemoveOptionRow(opt)));
@@ -172,6 +168,8 @@ namespace NarrativeTool.Canvas.Views
             optionsList.Clear();
             optionRows.Clear();
             var data = (ChoiceNodeData)Node;
+            foreach (var opt in data.Options)
+                portViews.Remove(opt.PortId);
             for (int i = 0; i < data.Options.Count; i++)
                 AddOptionRow(data.Options[i], i);
         }
@@ -212,7 +210,7 @@ namespace NarrativeTool.Canvas.Views
                 option.Label = oldVal;
                 Canvas.Commands.Execute(new SetPropertyCommand("Option Label",
                     v => option.Label = (string)v, oldVal, newVal,
-                    Canvas.Bus, Canvas.Graph?.Id));
+                    Canvas.Bus));
             };
             row.Add(textField);
 
@@ -235,7 +233,10 @@ namespace NarrativeTool.Canvas.Views
             // Condition body
             var condBody = new VisualElement();
             condBody.AddToClassList("nt-option-condition-body");
-            condBody.style.display = string.IsNullOrEmpty(option.ConditionScript) ? DisplayStyle.None : DisplayStyle.Flex;
+            bool expanded = option.ConditionExpanded || option.HasCondition;
+            option.ConditionExpanded = expanded;
+            condBody.style.display = expanded ? DisplayStyle.Flex : DisplayStyle.None;
+            condBtn.EnableInClassList("nt-option-condition-btn--active", expanded);
 
             // Condition field
             var condFieldRow = new VisualElement();
@@ -250,22 +251,20 @@ namespace NarrativeTool.Canvas.Views
                 option.ConditionScript = oldVal;
                 Canvas.Commands.Execute(new SetPropertyCommand("ConditionScript",
                     v => option.ConditionScript = (string)v, oldVal, newVal,
-                    Canvas.Bus, Canvas.Graph?.Id));
+                    Canvas.Bus));
             };
             condFieldRow.Add(condField);
             condBody.Add(condFieldRow);
 
-            // Show-if-false toggle
+            // Hide-when-false toggle
             var toggleRow = new VisualElement();
             toggleRow.AddToClassList("nt-option-condition-toggle");
-            var toggle = new Toggle("Show if false") { value = option.HideIfFalse };
+            var toggle = new Toggle("Hide when false") { value = option.HideWhenConditionFalse };
             toggle.RegisterValueChangedCallback(evt =>
             {
-                var oldVal = option.HideIfFalse;
-                option.HideIfFalse = evt.newValue;
-                Canvas.Commands.Execute(new SetPropertyCommand("HideIfFalse",
-                    v => option.HideIfFalse = (bool)v, oldVal, evt.newValue,
-                    Canvas.Bus, Canvas.Graph?.Id));
+                Canvas.Commands.Execute(new SetPropertyCommand("HideWhenConditionFalse",
+                    v => option.HideWhenConditionFalse = (bool)v,
+                    evt.previousValue, evt.newValue, Canvas.Bus));
             });
             toggleRow.Add(toggle);
             condBody.Add(toggleRow);
@@ -277,19 +276,12 @@ namespace NarrativeTool.Canvas.Views
 
         private void ToggleCondition(ChoiceOption option, VisualElement container)
         {
-            // Toggle condition data
-            bool hasCondition = string.IsNullOrEmpty(option.ConditionScript);
-            if (hasCondition)
-                option.ConditionScript = ""; // enable with empty, or could default to "true"
-            else
-                option.ConditionScript = "";
-
-            // Update UI
+            option.ConditionExpanded = !option.ConditionExpanded;
             var condBtn = container.Q<Button>(className: "nt-option-condition-btn");
-            condBtn?.EnableInClassList("nt-option-condition-btn--active", hasCondition);
+            condBtn?.EnableInClassList("nt-option-condition-btn--active", option.ConditionExpanded);
             var condBody = container.Q<VisualElement>(className: "nt-option-condition-body");
             if (condBody != null)
-                condBody.style.display = hasCondition ? DisplayStyle.Flex : DisplayStyle.None;
+                condBody.style.display = option.ConditionExpanded ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private void ShowDeleteConfirmation(VisualElement optionRow, ChoiceOption option, int index)
