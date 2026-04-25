@@ -64,4 +64,32 @@ namespace NarrativeTool.Core.EventSystem
         { ProjectId = projectId; VariableId = variableId; OldFolder = oldFolder; NewFolder = newFolder; }
         public override string ToString() => $"{{ Var={VariableId}, \"{OldFolder}\" -> \"{NewFolder}\" }}";
     }
+
+    public readonly struct VariableFolderAddedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string FolderPath;
+        public VariableFolderAddedEvent(string projectId, string folderPath)
+        { ProjectId = projectId; FolderPath = folderPath; }
+        public override string ToString() => $"{{ Project={ProjectId}, Folder=\"{FolderPath}\" }}";
+    }
+
+    public readonly struct VariableFolderRemovedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string FolderPath;
+        public VariableFolderRemovedEvent(string projectId, string folderPath)
+        { ProjectId = projectId; FolderPath = folderPath; }
+        public override string ToString() => $"{{ Project={ProjectId}, Folder=\"{FolderPath}\" }}";
+    }
+
+    public readonly struct VariableFolderRenamedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string OldPath;
+        public readonly string NewPath;
+        public VariableFolderRenamedEvent(string projectId, string oldPath, string newPath)
+        { ProjectId = projectId; OldPath = oldPath; NewPath = newPath; }
+        public override string ToString() => $"{{ Folder \"{OldPath}\" -> \"{NewPath}\" }}";
+    }
 }

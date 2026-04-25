@@ -16,14 +16,15 @@ namespace NarrativeTool.Core.ContextMenu
 
             return new List<ContextMenuItem>
             {
-                ContextMenuItem.Of("Rename", () => panel.BeginRename(v.Id)),
+                ContextMenuItem.Of("Rename", () => panel.BeginRenameVariable(v.Id)),
                 ContextMenuItem.Of("Delete", () => panel.RemoveVariable(v.Id)),
             };
         }
     }
 
     /// <summary>
-    /// Right-click on a folder header or empty list area → Add variable here.
+    /// Right-click on a folder header (or empty list area when FolderPath is "")
+    /// → add variable here, add a folder, and on a real folder rename / delete.
     /// </summary>
     public sealed class VariableFolderContextMenuProvider : IContextMenuProvider
     {
@@ -32,15 +33,26 @@ namespace NarrativeTool.Core.ContextMenu
             if (target is not VariableFolderContextTarget ctx) return null;
             var panel = ctx.Panel;
             string folder = ctx.FolderPath;
+            bool isRoot = string.IsNullOrEmpty(folder);
 
-            string label = string.IsNullOrEmpty(folder)
+            string addVarLabel = isRoot
                 ? "Add variable"
                 : $"Add variable in '{folder}'";
 
-            return new List<ContextMenuItem>
+            var items = new List<ContextMenuItem>
             {
-                ContextMenuItem.Of(label, () => panel.AddVariable(folder)),
+                ContextMenuItem.Of(addVarLabel, () => panel.AddVariable(folder)),
+                ContextMenuItem.Of("Add folder", panel.AddFolder),
             };
+
+            if (!isRoot)
+            {
+                items.Add(ContextMenuItem.Separator());
+                items.Add(ContextMenuItem.Of("Rename folder", () => panel.BeginRenameFolder(folder)));
+                items.Add(ContextMenuItem.Of("Delete folder", () => panel.RemoveFolder(folder)));
+            }
+
+            return items;
         }
     }
 }
