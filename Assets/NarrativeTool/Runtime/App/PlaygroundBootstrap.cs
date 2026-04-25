@@ -5,6 +5,7 @@ using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
 using NarrativeTool.Data.Project;
+using NarrativeTool.UI.Variables;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -56,14 +57,27 @@ namespace NarrativeTool.App
             contextMenu.RegisterProvider(new EdgeContextMenuProvider());
             contextMenu.RegisterProvider(new WaypointContextMenuProvider());
             contextMenu.RegisterProvider(new EdgeDropContextMenuProvider());
+            contextMenu.RegisterProvider(new VariableContextMenuProvider());
+            contextMenu.RegisterProvider(new VariableFolderContextMenuProvider());
 
             var project = BuildTestProject();
             var graph = project.Graphs[0];
+            session.Project = project;
+
+            // Layout: variables panel on the left, canvas filling the rest.
+            var split = new VisualElement();
+            split.AddToClassList("nt-root");
+            split.style.flexDirection = FlexDirection.Row;
+            split.style.flexGrow = 1;
+            root.Add(split);
+
+            var varsPanel = new VariablesPanel();
+            split.Add(varsPanel);
+            varsPanel.Bind(project, session, contextMenu);
 
             canvas = new GraphView();
-            canvas.AddToClassList("nt-root");
             canvas.style.flexGrow = 1;
-            root.Add(canvas);
+            split.Add(canvas);
 
             canvas.Bind(graph, session, contextMenu);
             canvas.Focus();
@@ -93,6 +107,14 @@ namespace NarrativeTool.App
                                            dialog.Id, TestNodeData.InputPortId));
             graph.Edges.Add(new Edge("e3", dialog.Id, TestNodeData.OutputPortId,
                                            end.Id, EndNodeData.InputPortId));
+
+            // Seed a few variables so the panel has something to render.
+            project.Variables.Variables.Add(new VariableDefinition(
+                "var_seed_rep", "reputation", VariableType.Int, 0, "player"));
+            project.Variables.Variables.Add(new VariableDefinition(
+                "var_seed_met", "hasMetElara", VariableType.Bool, false, "player"));
+            project.Variables.Variables.Add(new VariableDefinition(
+                "var_seed_act", "act", VariableType.Int, 1, ""));
 
             return project;
         }
