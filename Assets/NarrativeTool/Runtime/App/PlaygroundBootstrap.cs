@@ -6,8 +6,11 @@ using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
 using NarrativeTool.Data.Project;
 using NarrativeTool.Data.Serialization;
+using NarrativeTool.Playback;
+using NarrativeTool.Playback.Handlers;
 using NarrativeTool.UI;
 using NarrativeTool.UI.Library;
+using NarrativeTool.UI.Playback;
 using System;
 using System.IO;
 using UnityEngine;
@@ -42,6 +45,19 @@ namespace NarrativeTool.App
             var nodeRegistry = new NodeRegistry();
             nodeRegistry.RegisterBuiltInTypes();
             Services.Register(nodeRegistry);
+
+            // Runtime/playback handlers — one impl per built-in node type.
+            // External node types should register their own handler the same
+            // way before they're first played.
+            var playbackRegistry = new PlaybackRegistry();
+            playbackRegistry.Register<StartNodeData>(new StartNodeRuntime());
+            playbackRegistry.Register<EndNodeData>(new EndNodeRuntime());
+            playbackRegistry.Register<TextNodeData>(new TextNodeRuntime());
+            playbackRegistry.Register<DialogNodeData>(new DialogNodeRuntime());
+            playbackRegistry.Register<TestNodeData>(new TestNodeRuntime());
+            playbackRegistry.Register<ChoiceNodeData>(new ChoiceNodeRuntime());
+            playbackRegistry.Register<ConditionNodeData>(new ConditionNodeRuntime());
+            Services.Register(playbackRegistry);
 
             session = new SessionState(bus);
             contextMenu = Services.Get<ContextMenuController>();
@@ -170,12 +186,27 @@ namespace NarrativeTool.App
             split.Add(sidebar);
             sidebar.Bind(project, session, contextMenu);
 
+            // Right pane: canvas on top, playback overlay docked below.
+            var rightPane = new VisualElement();
+            rightPane.style.flexGrow = 1;
+            rightPane.style.flexDirection = FlexDirection.Column;
+            split.Add(rightPane);
+
             var canvas = new GraphView();
             canvas.style.flexGrow = 1;
-            split.Add(canvas);
+            rightPane.Add(canvas);
 
             canvas.Bind(project.Graphs[0], session, contextMenu);
             canvas.Focus();
+
+            var overlay = new PlaybackOverlay(project, project.Graphs[0],
+                                              Services.Get<PlaybackRegistry>(), canvas);
+            rightPane.Add(overlay);
+
+            // "Start playback here" on a node's right-click menu routes
+            // through the GraphView so the bootstrap can hand it to the
+            // overlay without canvas-internal coupling.
+            canvas.OnStartPlayback = nodeId => overlay.StartAt(nodeId);
 
             // Ctrl+S writes the open project back to its file. Registered
             // at root so it works regardless of which subview has focus.

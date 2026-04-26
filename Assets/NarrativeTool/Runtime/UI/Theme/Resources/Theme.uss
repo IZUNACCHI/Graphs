@@ -24,6 +24,14 @@
     border-top-width: 2px;   border-bottom-width: 2px;
 }
 
+/* Pulsing-ish highlight for the node currently being executed in playback */
+.nt-node--playing {
+    border-left-color: #4a9a6a;  border-right-color: #4a9a6a;
+    border-top-color: #4a9a6a;   border-bottom-color: #4a9a6a;
+    border-left-width: 2px;  border-right-width: 2px;
+    border-top-width: 2px;   border-bottom-width: 2px;
+}
+
 /* Node header, containing the title and optionally other controls, code overrides the color */
 .nt-node-header {
     height: 24px;
@@ -1104,6 +1112,52 @@
     border-color: #2a4a2a;
     background-color: #0a140a;
 }
+
+/* ========== Playback overlay (bottom of editor view) ========== */
+.nt-playback {
+    flex-direction: row;
+    align-items: center;
+    background-color: #0a0a0a;
+    border-top-width: 1px;
+    border-top-color: #1a1a1a;
+    padding-left: 12px; padding-right: 12px;
+    padding-top: 6px;   padding-bottom: 6px;
+    flex-shrink: 0;
+}
+.nt-playback-status {
+    color: #4a9a6a;
+    font-size: 11px;
+    -unity-font-style: bold;
+    margin-right: 10px;
+}
+.nt-playback-preview {
+    color: #c8c8c8;
+    font-size: 11px;
+    flex-grow: 1;
+    white-space: normal;
+    margin-right: 10px;
+}
+.nt-playback-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+.nt-playback-btn {
+    background-color: rgba(0,0,0,0);
+    border-color: #2a2a2a;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-top-left-radius: 4px;    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+    color: #888;
+    font-size: 11px;
+    padding-left: 10px; padding-right: 10px;
+    padding-top: 4px;   padding-bottom: 4px;
+    margin-left: 4px;
+}
+.nt-playback-btn:hover { color: #c8c8c8; border-color: #3a3a3a; background-color: #161616; }
+.nt-playback-btn--primary { color: #4a9a6a; border-color: #2a4a2a; }
+.nt-playback-btn--primary:hover { color: #6ab08a; background-color: #0e1e0e; border-color: #3a6a3a; }
+.nt-playback-choice { color: #c8c8c8; }
 
 .nt-vars-name {
     color: #b8b8b8;

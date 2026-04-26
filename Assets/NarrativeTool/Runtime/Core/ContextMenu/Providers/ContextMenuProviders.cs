@@ -78,6 +78,8 @@ namespace NarrativeTool.Core.ContextMenu
 
             var items = new List<ContextMenuItem>
         {
+            ContextMenuItem.Of("Start playback here", () => canvas.OnStartPlayback?.Invoke(nv.Node.Id)),
+            ContextMenuItem.Separator(),
             ContextMenuItem.Of("Delete", canvas.DeleteSelected)
         };
 
