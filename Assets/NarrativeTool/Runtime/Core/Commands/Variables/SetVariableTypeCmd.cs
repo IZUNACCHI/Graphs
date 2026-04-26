@@ -34,10 +34,20 @@ namespace NarrativeTool.Core.Commands
             this.oldType = oldType; this.newType = newType;
             this.oldDefault = oldDefault;
             this.oldEnumTypeId = oldEnumTypeId;
-            // Switching to/from Enum always clears the EnumTypeId; the user
-            // re-selects an enum via SetVariableEnumTypeCmd.
-            this.newEnumTypeId = null;
-            this.newDefault = VariableStore.DefaultFor(newType);
+            // When switching to Enum, auto-bind to the first available enum
+            // (and its first member) so the picker doesn't show a phantom
+            // selection that doesn't match the underlying data. The user can
+            // then change the enum via SetVariableEnumTypeCmd.
+            if (newType == VariableType.Enum && project.Enums.Enums.Count > 0)
+            {
+                this.newEnumTypeId = project.Enums.Enums[0].Id;
+                this.newDefault = project.Enums.FirstMemberId(this.newEnumTypeId);
+            }
+            else
+            {
+                this.newEnumTypeId = null;
+                this.newDefault = VariableStore.DefaultFor(newType);
+            }
         }
 
         public void Do() => Apply(newType, newDefault, newEnumTypeId, oldType, oldEnumTypeId);

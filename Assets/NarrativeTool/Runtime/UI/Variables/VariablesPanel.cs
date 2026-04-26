@@ -39,6 +39,7 @@ namespace NarrativeTool.UI.Variables
 
         private IDisposable subAdded, subRemoved, subRenamed, subTypeChanged, subDefaultChanged, subMoved;
         private IDisposable subFolderAdded, subFolderRemoved, subFolderRenamed, subEnumTypeChanged;
+        private IDisposable subEnumDefAdded, subEnumDefRemoved, subEnumDefRenamed, subEnumMemberChanged;
 
         public VariablesPanel()
         {
@@ -135,6 +136,11 @@ namespace NarrativeTool.UI.Variables
             subFolderRemoved = bus.Subscribe<VariableFolderRemovedEvent>(_ => Rebuild());
             subFolderRenamed = bus.Subscribe<VariableFolderRenamedEvent>(_ => Rebuild());
             subEnumTypeChanged = bus.Subscribe<VariableEnumTypeChangedEvent>(_ => Rebuild());
+            // The variable editor's enum picker depends on enum CRUD too.
+            subEnumDefAdded = bus.Subscribe<EnumAddedEvent>(_ => Rebuild());
+            subEnumDefRemoved = bus.Subscribe<EnumRemovedEvent>(_ => Rebuild());
+            subEnumDefRenamed = bus.Subscribe<EnumRenamedEvent>(_ => Rebuild());
+            subEnumMemberChanged = bus.Subscribe<EnumMemberChangedEvent>(_ => Rebuild());
 
             Rebuild();
         }
@@ -151,6 +157,10 @@ namespace NarrativeTool.UI.Variables
             subFolderRemoved?.Dispose(); subFolderRemoved = null;
             subFolderRenamed?.Dispose(); subFolderRenamed = null;
             subEnumTypeChanged?.Dispose(); subEnumTypeChanged = null;
+            subEnumDefAdded?.Dispose(); subEnumDefAdded = null;
+            subEnumDefRemoved?.Dispose(); subEnumDefRemoved = null;
+            subEnumDefRenamed?.Dispose(); subEnumDefRenamed = null;
+            subEnumMemberChanged?.Dispose(); subEnumMemberChanged = null;
         }
 
         private CommandSystem Commands => session.ProjectCommands;

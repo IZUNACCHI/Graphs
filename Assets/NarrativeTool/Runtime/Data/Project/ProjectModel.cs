@@ -16,8 +16,9 @@ namespace NarrativeTool.Data.Project
         public EntityStore Entities { get; } = new();
 
         // Locales the project supports. en-US is always present and cannot
-        // be removed (enforced at the wizard level for now).
-        public List<string> Locales { get; } = new() { "en-US" };
+        // be removed (enforced at the wizard level for now). Settable so
+        // JSON deserialization replaces the default-init list cleanly.
+        public List<string> Locales { get; set; } = new() { "en-US" };
 
         public GraphData FindGraph(string id)
         {
