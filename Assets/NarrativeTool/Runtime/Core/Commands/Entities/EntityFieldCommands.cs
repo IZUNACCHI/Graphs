@@ -101,16 +101,29 @@ namespace NarrativeTool.Core.Commands
         private readonly object oldDefault, newDefault;
         private readonly string oldEnumTypeId;
 
+        private readonly string newEnumTypeId;
+
         public SetEntityFieldTypeCmd(ProjectModel project, EventBus bus, string entityId, string fieldId,
                                      VariableType oldType, VariableType newType, object oldDefault, string oldEnumTypeId)
         {
             this.project = project; this.bus = bus; this.entityId = entityId; this.fieldId = fieldId;
             this.oldType = oldType; this.newType = newType;
             this.oldDefault = oldDefault; this.oldEnumTypeId = oldEnumTypeId;
-            this.newDefault = VariableStore.DefaultFor(newType);
+            // Auto-bind to the first available enum when switching to Enum
+            // so the picker isn't phantom-selected. Mirrors SetVariableTypeCmd.
+            if (newType == VariableType.Enum && project.Enums.Enums.Count > 0)
+            {
+                this.newEnumTypeId = project.Enums.Enums[0].Id;
+                this.newDefault = project.Enums.FirstMemberId(this.newEnumTypeId);
+            }
+            else
+            {
+                this.newEnumTypeId = null;
+                this.newDefault = VariableStore.DefaultFor(newType);
+            }
         }
 
-        public void Do() => Apply(newType, newDefault, null);
+        public void Do() => Apply(newType, newDefault, newEnumTypeId);
         public void Undo() => Apply(oldType, oldDefault, oldEnumTypeId);
 
         private void Apply(VariableType type, object defaultVal, string enumTypeId)

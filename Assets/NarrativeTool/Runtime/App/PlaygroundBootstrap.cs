@@ -5,9 +5,11 @@ using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
 using NarrativeTool.Data.Project;
+using NarrativeTool.Data.Serialization;
 using NarrativeTool.UI;
 using NarrativeTool.UI.Library;
 using System;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -45,7 +47,13 @@ namespace NarrativeTool.App
             contextMenu = Services.Get<ContextMenuController>();
 
             library = new ProjectLibrary();
-            SeedLibrary(library);
+            // Try to load the persisted library; fall back to mockup seeds
+            // if there's nothing on disk yet (first launch).
+            if (!LibrarySerializer.Load(library))
+            {
+                SeedLibrary(library);
+                LibrarySerializer.Save(library);
+            }
         }
 
         private void Start()
@@ -87,13 +95,14 @@ namespace NarrativeTool.App
             var screen = new LibraryScreen();
             screen.OnOpenProject = entry =>
             {
-                // TODO persistence: actually load the project file at
-                // entry.Path. For now we just spin up a fresh demo project
-                // tagged with the entry's name so the editor opens and the
-                // wiring is exercised end-to-end.
-                var project = BuildDemoProject(entry.Name);
+                // Try to load from disk; fall back to a fresh demo project
+                // (tagged with the entry's name) if the file is missing —
+                // happens for the seeded mockup entries on first launch.
+                var project = ProjectSerializer.Load(entry.Path)
+                              ?? BuildDemoProject(entry.Name);
                 library.RegisterOpened(entry);
-                OpenEditor(project);
+                LibrarySerializer.Save(library);
+                OpenEditor(project, entry.Path, entry);
             };
             screen.OnNewProject = ShowWizard;
             screen.OnOpenFile = () =>
@@ -103,6 +112,7 @@ namespace NarrativeTool.App
                 Debug.Log("[Library] Open File — TODO: file picker. Falling through to New Project wizard.");
                 ShowWizard();
             };
+            screen.OnLibraryChanged = () => LibrarySerializer.Save(library);
             screen.Bind(library);
             root.Add(screen);
         }
@@ -115,32 +125,45 @@ namespace NarrativeTool.App
                 OnCreate = result =>
                 {
                     var project = BuildBlankProject(result);
+                    // Wizard-supplied save location is decorative for now;
+                    // route everything through the default scheme so the
+                    // file actually lands somewhere persistent.
+                    var path = ProjectSerializer.DefaultPathFor(project.Name);
+                    ProjectSerializer.Save(project, path);
+
                     var entry = new ProjectLibraryEntry
                     {
                         Name = project.Name,
-                        Path = result.SaveLocation + project.Name + ".nproj",
+                        Path = path,
                         OpenedDisplay = "Just now",
                         Pinned = false,
-                        NodeCount = 0,
-                        EdgeCount = 0,
+                        NodeCount = project.Graphs[0].Nodes.Count,
+                        EdgeCount = project.Graphs[0].Edges.Count,
                         ThumbHueKey = "gr",
                     };
                     library.RegisterOpened(entry);
-                    OpenEditor(project);
+                    LibrarySerializer.Save(library);
+                    OpenEditor(project, path, entry);
                 },
             };
             root.Add(wiz);
         }
 
-        private void OpenEditor(ProjectModel project)
+        private ProjectLibraryEntry currentEntry;
+
+        private void OpenEditor(ProjectModel project, string path, ProjectLibraryEntry entry)
         {
             session.Project = project;
+            session.ProjectPath = path;
+            currentEntry = entry;
+
             ClearRoot();
 
             var split = new VisualElement();
             split.AddToClassList("nt-root");
             split.style.flexDirection = FlexDirection.Row;
             split.style.flexGrow = 1;
+            split.focusable = true;
             root.Add(split);
 
             var sidebar = new ProjectSidebar();
@@ -154,8 +177,41 @@ namespace NarrativeTool.App
             canvas.Bind(project.Graphs[0], session, contextMenu);
             canvas.Focus();
 
+            // Ctrl+S writes the open project back to its file. Registered
+            // at root so it works regardless of which subview has focus.
+            split.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if ((e.ctrlKey || e.commandKey) && e.keyCode == KeyCode.S)
+                {
+                    SaveCurrent();
+                    e.StopPropagation();
+                }
+            });
+
             // TODO: a "Back to Library" affordance somewhere in the editor
             // chrome (top-bar button or menu) that calls ShowLibrary().
+        }
+
+        private void SaveCurrent()
+        {
+            var project = session.Project;
+            var path = session.ProjectPath;
+            if (project == null || string.IsNullOrEmpty(path))
+            {
+                Debug.LogWarning("[Bootstrap] Save: no open project / path.");
+                return;
+            }
+            ProjectSerializer.Save(project, path);
+
+            // Refresh the entry's stat counts so the library tile reflects
+            // the latest state on next render.
+            if (currentEntry != null && project.Graphs.Count > 0)
+            {
+                var g = project.Graphs[0];
+                currentEntry.NodeCount = g.Nodes.Count;
+                currentEntry.EdgeCount = g.Edges.Count;
+                LibrarySerializer.Save(library);
+            }
         }
 
         private void ClearRoot()

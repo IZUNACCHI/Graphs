@@ -17,8 +17,11 @@ namespace NarrativeTool.Data.Graph
         public NodeCategory Category { get; set; }
         public Vector2 Position { get; set; }
 
-        public List<PortData> Inputs { get; } = new();
-        public List<PortData> Outputs { get; } = new();
+        // Settable so JSON deserialization replaces the constructor-added
+        // ports cleanly (otherwise it would Add into the existing list and
+        // duplicate them).
+        public List<PortData> Inputs { get; set; } = new();
+        public List<PortData> Outputs { get; set; } = new();
 
         public List<PropertyInstance> Properties { get; } = new();
 

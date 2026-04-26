@@ -29,6 +29,10 @@ namespace NarrativeTool.Data.Project
 
         public EventBus Bus => bus;
         public ProjectModel Project { get; set; }
+        // Absolute path the open project lives at on disk. Set on
+        // open/create/save; null while no project is bound. Ctrl+S writes
+        // back to this path.
+        public string ProjectPath { get; set; }
 
         /// <summary>
         /// Undo stack for project-scoped operations (variables, entities,
@@ -74,6 +78,7 @@ namespace NarrativeTool.Data.Project
             selectionByGraph.Clear();
             projectCommands = null;
             Project = null;
+            ProjectPath = null;
         }
     }
 }

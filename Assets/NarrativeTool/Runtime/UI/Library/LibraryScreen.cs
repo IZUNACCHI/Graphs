@@ -22,6 +22,9 @@ namespace NarrativeTool.UI.Library
         public Action<ProjectLibraryEntry> OnOpenProject;
         public Action OnNewProject;
         public Action OnOpenFile;
+        // Fires after any in-screen mutation (pin toggle for now). Bootstrap
+        // hooks this to persist library.json.
+        public Action OnLibraryChanged;
 
         public LibraryScreen()
         {
@@ -176,6 +179,7 @@ namespace NarrativeTool.UI.Library
             var pin = new Button(() =>
             {
                 library.TogglePin(entry.Path);
+                OnLibraryChanged?.Invoke();
                 RebuildGrids();
             }) { text = entry.Pinned ? "◆" : "◇" };
             pin.AddToClassList("nt-library-pin-btn");
