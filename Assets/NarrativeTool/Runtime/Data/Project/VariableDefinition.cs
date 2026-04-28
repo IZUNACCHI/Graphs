@@ -9,9 +9,9 @@ namespace NarrativeTool.Data.Project
     /// cref="Name"/> is the user-facing display label and may change via
     /// rename. Keeping refs Id-based makes rename non-breaking.
     /// </summary>
-    public sealed class VariableDefinition
+    public sealed class VariableDefinition : IFolderableItem, INamedItem
     {
-        public string Id { get; }                        // stable; never mutated
+        public string Id { get; set; }                        // stable; never mutated
         public string Name { get; set; }                 // display, renameable
         public VariableType Type { get; set; }
         public object DefaultValue { get; set; }         // boxed; type matches Type
@@ -34,6 +34,8 @@ namespace NarrativeTool.Data.Project
             FolderPath = folderPath ?? "";
             EnumTypeId = enumTypeId;
         }
+
+        public VariableDefinition() { }
     }
 
     public enum VariableType

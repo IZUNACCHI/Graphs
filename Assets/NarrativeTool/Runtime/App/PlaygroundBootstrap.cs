@@ -1,35 +1,47 @@
-using NarrativeTool.Canvas;
+using NarrativeTool.Canvas.Core;
 using NarrativeTool.Core;
 using NarrativeTool.Core.ContextMenu;
+using NarrativeTool.Core.ContextMenu.Providers;
 using NarrativeTool.Core.EventSystem;
+using NarrativeTool.Core.Runtime;
+using NarrativeTool.Core.Scripting;
+using NarrativeTool.Core.Scripting.Editors;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
 using NarrativeTool.Data.Project;
 using NarrativeTool.Data.Serialization;
 using NarrativeTool.UI;
 using NarrativeTool.UI.Library;
+using NarrativeTool.UI.Runtime;
 using System;
-using System.IO;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace NarrativeTool.App
 {
-    /// <summary>
-    /// App bootstrap. Sets up shared services, then shows the project
-    /// library start screen. When the user opens or creates a project, the
-    /// root view is swapped for the editor (sidebar + canvas).
-    /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class PlaygroundBootstrap : MonoBehaviour
     {
         [SerializeField] private StyleSheet theme;
 
+        // ── Core services ──
         private SessionState session;
         private ContextMenuController contextMenu;
         private ProjectLibrary library;
 
+        // ── Editor / canvas ──
         private VisualElement root;
+        private GraphTabManager tabManager;
+
+        // ── Runtime ──
+        private RuntimeEngine runtimeEngine;
+        private RuntimePanel runtimePanel;
+        private IDisposable runtimeStateSub;
+
+        // ── Toolbar controls ──
+        private Button btnPlayGraph, btnStopRuntime;
+        private Label runIndicator;
 
         private void Awake()
         {
@@ -43,17 +55,27 @@ namespace NarrativeTool.App
             nodeRegistry.RegisterBuiltInTypes();
             Services.Register(nodeRegistry);
 
+            var executorRegistry = new NodeExecutorRegistry();
+            executorRegistry.ScanAssemblies();
+            Services.Register(executorRegistry);
+
             session = new SessionState(bus);
             contextMenu = Services.Get<ContextMenuController>();
 
+            // Serialization
+            SerializerRegistry.Register(new JsonNetSerializer());
+            SerializerRegistry.SetCurrent("json");
+
             library = new ProjectLibrary();
-            // Try to load the persisted library; fall back to mockup seeds
-            // if there's nothing on disk yet (first launch).
-            if (!LibrarySerializer.Load(library))
-            {
-                SeedLibrary(library);
-                LibrarySerializer.Save(library);
-            }
+            LibrarySerializer.Load(library);
+
+            var scriptRegistry = new ScriptingEditorRegistry();
+            scriptRegistry.Register(new TextScriptingEditor());
+            Services.Register(scriptRegistry);
+
+            // Lua scripting backend
+            var scriptingBackend = new LuaScriptingBackend(null, null);  // will be connected at runtime
+            Services.Register<IScriptingBackend>(scriptingBackend);
         }
 
         private void Start()
@@ -64,7 +86,7 @@ namespace NarrativeTool.App
 
             var sheet = theme != null ? theme : Resources.Load<StyleSheet>("Theme");
             if (sheet != null) root.styleSheets.Add(sheet);
-            else Debug.LogWarning("[Bootstrap] Theme.uss not found. Drop it into a Resources folder or assign it on PlaygroundBootstrap.");
+            else Debug.LogWarning("[Bootstrap] Theme.uss not found.");
 
             contextMenu.SetRootHost(root);
             contextMenu.RegisterProvider(new CanvasContextMenuProvider());
@@ -78,6 +100,8 @@ namespace NarrativeTool.App
             contextMenu.RegisterProvider(new EntityFolderContextMenuProvider());
             contextMenu.RegisterProvider(new EnumDefContextMenuProvider());
             contextMenu.RegisterProvider(new EnumFolderContextMenuProvider());
+            contextMenu.RegisterProvider(new GraphContextMenuProvider());
+            contextMenu.RegisterProvider(new GraphFolderContextMenuProvider());
 
             ShowLibrary();
         }
@@ -86,20 +110,16 @@ namespace NarrativeTool.App
 
         private void ShowLibrary()
         {
-            // Drop any open project's per-graph state when returning here.
             session.Clear();
             contextMenu.Close();
+            CloseEditor();
 
             ClearRoot();
 
             var screen = new LibraryScreen();
             screen.OnOpenProject = entry =>
             {
-                // Try to load from disk; fall back to a fresh demo project
-                // (tagged with the entry's name) if the file is missing —
-                // happens for the seeded mockup entries on first launch.
-                var project = ProjectSerializer.Load(entry.Path)
-                              ?? BuildDemoProject(entry.Name);
+                var project = ProjectSerializer.Load(entry.Path);
                 library.RegisterOpened(entry);
                 LibrarySerializer.Save(library);
                 OpenEditor(project, entry.Path, entry);
@@ -107,9 +127,7 @@ namespace NarrativeTool.App
             screen.OnNewProject = ShowWizard;
             screen.OnOpenFile = () =>
             {
-                // TODO: open a real file picker for .nproj files. For now,
-                // route this to the wizard so the path is at least usable.
-                Debug.Log("[Library] Open File — TODO: file picker. Falling through to New Project wizard.");
+                Debug.Log("[Library] Open File — TODO: file picker.");
                 ShowWizard();
             };
             screen.OnLibraryChanged = () => LibrarySerializer.Save(library);
@@ -117,28 +135,32 @@ namespace NarrativeTool.App
             root.Add(screen);
         }
 
+        private void CloseEditor()
+        {
+            StopRuntime();
+            tabManager?.UnsubscribeEvents();
+            tabManager = null;
+        }
+
         private void ShowWizard()
         {
             var wiz = new NewProjectWizard
             {
-                OnCancel = () => { /* RemoveFromHierarchy handled by the wizard */ },
+                OnCancel = () => { },
                 OnCreate = result =>
                 {
                     var project = BuildBlankProject(result);
-                    // Wizard-supplied save location is decorative for now;
-                    // route everything through the default scheme so the
-                    // file actually lands somewhere persistent.
-                    var path = ProjectSerializer.DefaultPathFor(project.Name);
+                    var path = ProjectSerializer.UserPathFor(project.Name, result.SaveLocation);
                     ProjectSerializer.Save(project, path);
 
                     var entry = new ProjectLibraryEntry
                     {
                         Name = project.Name,
                         Path = path,
-                        OpenedDisplay = "Just now",
+                        LastOpened = DateTime.Now,
                         Pinned = false,
-                        NodeCount = project.Graphs[0].Nodes.Count,
-                        EdgeCount = project.Graphs[0].Edges.Count,
+                        GraphCount = 1,
+                        NodeCount = 1,
                         ThumbHueKey = "gr",
                     };
                     library.RegisterOpened(entry);
@@ -159,6 +181,30 @@ namespace NarrativeTool.App
 
             ClearRoot();
 
+            // ── Run toolbar (top bar) ──
+            var runToolbar = new VisualElement();
+            runToolbar.AddToClassList("run-toolbar");
+            runToolbar.style.flexDirection = FlexDirection.Row;
+
+            btnPlayGraph = new Button(() => StartRuntime());
+            btnPlayGraph.text = "▶ Run Graph";
+            btnPlayGraph.AddToClassList("run-toolbar__btn");
+            btnPlayGraph.AddToClassList("run-toolbar__btn--graph");
+
+            btnStopRuntime = new Button(() => StopRuntime());
+            btnStopRuntime.text = "■ Stop";
+            btnStopRuntime.AddToClassList("run-toolbar__btn");
+            btnStopRuntime.AddToClassList("run-toolbar__btn--stop");
+
+            runIndicator = new Label("");
+            runIndicator.AddToClassList("run-toolbar__run-indicator");
+
+            runToolbar.Add(btnPlayGraph);
+            runToolbar.Add(btnStopRuntime);
+            runToolbar.Add(runIndicator);
+            root.Add(runToolbar);
+
+            // ── Main split: sidebar + canvas + runtime panel ──
             var split = new VisualElement();
             split.AddToClassList("nt-root");
             split.style.flexDirection = FlexDirection.Row;
@@ -170,27 +216,115 @@ namespace NarrativeTool.App
             split.Add(sidebar);
             sidebar.Bind(project, session, contextMenu);
 
-            var canvas = new GraphView();
-            canvas.style.flexGrow = 1;
-            split.Add(canvas);
+            tabManager = new GraphTabManager(session, contextMenu);
+            tabManager.SubscribeToEvents(session.Bus);
+            tabManager.style.flexGrow = 1;
+            split.Add(tabManager);
 
-            canvas.Bind(project.Graphs[0], session, contextMenu);
-            canvas.Focus();
+            // Open the first graph as a tab (if any)
+            var firstGraphLazy = project.Graphs.Items.FirstOrDefault();
+            if (firstGraphLazy != null)
+                tabManager.OpenGraph(firstGraphLazy);
 
-            // Ctrl+S writes the open project back to its file. Registered
-            // at root so it works regardless of which subview has focus.
+            // Subscribe to sidebar double‑click → open tab
+            sidebar.OnGraphDoubleClicked += lazy => tabManager.OpenGraph(lazy);
+
+            // Runtime panel (hidden until Play is pressed)
+            runtimePanel = new RuntimePanel();
+            runtimePanel.style.width = 250;
+            runtimePanel.style.display = DisplayStyle.None;
+            split.Add(runtimePanel);
+
+            // Ctrl+S saves the active tab & project
             split.RegisterCallback<KeyDownEvent>(e =>
             {
                 if ((e.ctrlKey || e.commandKey) && e.keyCode == KeyCode.S)
                 {
+                    tabManager.SaveActiveTab();
                     SaveCurrent();
                     e.StopPropagation();
                 }
             });
-
-            // TODO: a "Back to Library" affordance somewhere in the editor
-            // chrome (top-bar button or menu) that calls ShowLibrary().
         }
+
+        // ───────── Runtime start/stop ─────────
+
+        private void StartRuntime()
+        {
+            if (runtimeEngine != null && runtimeEngine.State != RuntimeState.Idle && runtimeEngine.State != RuntimeState.Done)
+                return;
+
+            GraphTab targetTab = tabManager?.ActiveTab;
+
+            if (targetTab == null)
+            {
+                var firstLazy = session.Project?.Graphs.Items.FirstOrDefault();
+                if (firstLazy != null)
+                    targetTab = tabManager.OpenGraph(firstLazy);
+            }
+
+            if (targetTab == null)
+            {
+                Debug.LogWarning("[Bootstrap] No graph is open. Double‑click a graph to open it, then press Run.");
+                return;
+            }
+
+            string graphId = targetTab.Lazy.Id;   // ← use the stable ID from Lazy
+
+            if (string.IsNullOrEmpty(graphId))
+            {
+                Debug.LogError("[Bootstrap] Active graph has no Id. Try re‑opening it.");
+                return;
+            }
+
+            session.IsPlayMode = true;
+
+            // Create runtime services (use your actual class names)
+            var varService = new RuntimeVariableStore(session.Project);
+            var entityService = new RuntimeEntityStore(session.Project);
+            var graphLoader = new ProjectGraphLoader(session.Project);
+            // Inside StartRuntime, replace the null scripting backend:
+            var luaBackend = new LuaScriptingBackend(varService, entityService);
+            var context = new RuntimeContext(session.Project, session.Bus, graphLoader,
+                luaBackend, varService, entityService);
+
+            var executorRegistry = Services.Get<NodeExecutorRegistry>();
+            runtimeEngine = new RuntimeEngine(context, executorRegistry);
+
+            runtimePanel.Bind(runtimeEngine, session.Bus);
+            runtimePanel.style.display = DisplayStyle.Flex;
+
+            runtimeEngine.Start(graphId);
+
+            runtimeStateSub = session.Bus.Subscribe<RuntimeStateChanged>(e =>
+            {
+                bool running = e.NewState == RuntimeState.Running || e.NewState == RuntimeState.Paused;
+                btnPlayGraph?.SetEnabled(!running);
+                btnStopRuntime?.SetEnabled(running);
+                if (runIndicator != null) runIndicator.text = running ? "● Running" : "";
+                if (e.NewState == RuntimeState.Idle || e.NewState == RuntimeState.Done)
+                {
+                    if (runtimePanel != null) runtimePanel.style.display = DisplayStyle.None;
+                    // Don't change button states here – StopRuntime already did
+                }
+            });
+        }
+
+        private void StopRuntime()
+        {
+            session.IsPlayMode = false;
+            runtimeEngine?.Stop();
+            runtimePanel?.Unbind();
+            if (runtimePanel != null) runtimePanel.style.display = DisplayStyle.None;
+            runtimeStateSub?.Dispose();
+            runtimeStateSub = null;
+
+            btnPlayGraph?.SetEnabled(true);
+            btnStopRuntime?.SetEnabled(false);
+            if (runIndicator != null) runIndicator.text = "";
+        }
+
+        // ───────── Save ─────────
 
         private void SaveCurrent()
         {
@@ -203,103 +337,39 @@ namespace NarrativeTool.App
             }
             ProjectSerializer.Save(project, path);
 
-            // Refresh the entry's stat counts so the library tile reflects
-            // the latest state on next render.
-            if (currentEntry != null && project.Graphs.Count > 0)
+            if (currentEntry != null && project.Graphs.Items.Count > 0)
             {
-                var g = project.Graphs[0];
-                currentEntry.NodeCount = g.Nodes.Count;
-                currentEntry.EdgeCount = g.Edges.Count;
+                int totalNodes = project.Graphs.Items.Sum(g => g.CachedNodeCount);
+                int totalEdges = project.Graphs.Items.Sum(g => g.CachedEdgeCount);
+                currentEntry.GraphCount = project.Graphs.Items.Count;
+                currentEntry.NodeCount = totalNodes;
                 LibrarySerializer.Save(library);
             }
         }
 
+        // ───────── Helpers ─────────
+
         private void ClearRoot()
         {
-            // Keep style sheets attached; just drop the visual children.
             for (int i = root.childCount - 1; i >= 0; i--)
                 root.RemoveAt(i);
         }
-
-        // ───────── Project factories ─────────
 
         private static ProjectModel BuildBlankProject(NewProjectResult result)
         {
             var id = "proj_" + Guid.NewGuid().ToString("N").Substring(0, 8);
             var project = new ProjectModel { Id = id, Name = result.ProjectName };
-            // en-US is added by ProjectModel's initializer — append the rest.
             foreach (var l in result.Locales)
                 if (l != "en-US" && !project.Locales.Contains(l))
                     project.Locales.Add(l);
 
             var graph = new GraphData("graph_main", "Main");
-            project.Graphs.Add(graph);
-            // Seed a single Start node so the canvas isn't empty.
             graph.Nodes.Add(new StartNodeData("n_start", new Vector2(120, 140)));
+
+            var lazy = new LazyGraph { Id = graph.Id, Name = graph.Name };
+            lazy.Update(graph);
+            project.Graphs.Items.Add(lazy);
             return project;
-        }
-
-        private static ProjectModel BuildDemoProject(string name)
-        {
-            var project = new ProjectModel { Id = "proj_demo", Name = name };
-            var graph = new GraphData("graph_01", "Main");
-            project.Graphs.Add(graph);
-
-            var start = new StartNodeData("n_start", new Vector2(80, 140));
-            var text = new TextNodeData("n_text", "Text Node", new Vector2(340, 140), "Hello, traveller.");
-            var dialog = new TestNodeData("n_dialog", "Dialog Node", new Vector2(500, 140));
-            var end = new EndNodeData("n_end", new Vector2(720, 140));
-
-            graph.Nodes.Add(start); graph.Nodes.Add(text);
-            graph.Nodes.Add(dialog); graph.Nodes.Add(end);
-
-            graph.Edges.Add(new Edge("e1", start.Id, StartNodeData.OutputPortId,
-                                           text.Id, TextNodeData.InputPortId));
-            graph.Edges.Add(new Edge("e2", text.Id, TextNodeData.OutputPortId,
-                                           dialog.Id, TestNodeData.InputPortId));
-            graph.Edges.Add(new Edge("e3", dialog.Id, TestNodeData.OutputPortId,
-                                           end.Id, EndNodeData.InputPortId));
-
-            // Seed an enum, an entity, and a few variables (mirrors the
-            // previous BuildTestProject content).
-            var moodEnum = new EnumDefinition("enum_seed_mood", "Mood");
-            moodEnum.Members.Add(new EnumMember("mood_happy", "Happy"));
-            moodEnum.Members.Add(new EnumMember("mood_sad", "Sad"));
-            moodEnum.Members.Add(new EnumMember("mood_neutral", "Neutral"));
-            project.Enums.Enums.Add(moodEnum);
-
-            var character = new EntityDefinition("ent_seed_character", "Character");
-            character.Fields.Add(new EntityField("f_name", "name", VariableType.String, ""));
-            character.Fields.Add(new EntityField("f_age", "age", VariableType.Int, 0));
-            character.Fields.Add(new EntityField("f_mood", "mood", VariableType.Enum, "mood_neutral", "enum_seed_mood"));
-            project.Entities.Entities.Add(character);
-
-            project.Variables.Folders.Add("player");
-            project.Variables.Folders.Add("world");
-            project.Variables.Variables.Add(new VariableDefinition(
-                "var_seed_rep", "reputation", VariableType.Int, 0, "player"));
-            project.Variables.Variables.Add(new VariableDefinition(
-                "var_seed_met", "hasMetElara", VariableType.Bool, false, "player"));
-            project.Variables.Variables.Add(new VariableDefinition(
-                "var_seed_mood", "mood", VariableType.Enum, "mood_neutral", "player",
-                enumTypeId: "enum_seed_mood"));
-            project.Variables.Variables.Add(new VariableDefinition(
-                "var_seed_act", "act", VariableType.Int, 1, ""));
-
-            return project;
-        }
-
-        private static void SeedLibrary(ProjectLibrary lib)
-        {
-            // TODO persistence: replace this with a real load from disk.
-            // The seeds below mirror the mockup data so the screen has
-            // something to render on first launch.
-            lib.Entries.Add(new ProjectLibraryEntry { Name = "Thornwood Chronicles", Path = "/projects/thornwood/thornwood.nproj", OpenedDisplay = "2 hours ago",      Pinned = true,  NodeCount = 42, EdgeCount = 61, ThumbHueKey = "te" });
-            lib.Entries.Add(new ProjectLibraryEntry { Name = "Echoes of Kael",       Path = "/projects/kael/kael.nproj",            OpenedDisplay = "Yesterday, 14:32", Pinned = true,  NodeCount = 18, EdgeCount = 22, ThumbHueKey = "pu" });
-            lib.Entries.Add(new ProjectLibraryEntry { Name = "Station Nine",         Path = "/projects/station9/station9.nproj",    OpenedDisplay = "3 days ago",       Pinned = false, NodeCount = 94, EdgeCount = 130, ThumbHueKey = "bl" });
-            lib.Entries.Add(new ProjectLibraryEntry { Name = "Miriam — Demo",        Path = "/demos/miriam/miriam.nproj",           OpenedDisplay = "1 week ago",       Pinned = false, NodeCount = 11, EdgeCount = 9,   ThumbHueKey = "am" });
-            lib.Entries.Add(new ProjectLibraryEntry { Name = "Untitled Project",     Path = "/projects/untitled/untitled.nproj",    OpenedDisplay = "2 weeks ago",      Pinned = false, NodeCount = 3,  EdgeCount = 1,   ThumbHueKey = "gr" });
-            lib.Entries.Add(new ProjectLibraryEntry { Name = "Lowland Heist [WIP]",  Path = "/projects/lowland/lowland.nproj",      OpenedDisplay = "3 weeks ago",      Pinned = false, NodeCount = 27, EdgeCount = 38,  ThumbHueKey = "rd" });
         }
     }
 }

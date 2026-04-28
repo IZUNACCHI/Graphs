@@ -8,9 +8,9 @@ namespace NarrativeTool.Data.Project
     /// definitions. As with variables/enums, <see cref="Id"/> is the stable
     /// reference future scripts bind against.
     /// </summary>
-    public sealed class EntityDefinition
+    public sealed class EntityDefinition : IFolderableItem, INamedItem
     {
-        public string Id { get; }
+        public string Id { get;  set; }
         public string Name { get; set; }
         public string FolderPath { get; set; } = "";
         public List<EntityField> Fields { get; } = new();
@@ -19,6 +19,8 @@ namespace NarrativeTool.Data.Project
         {
             Id = id; Name = name; FolderPath = folderPath ?? "";
         }
+
+        public EntityDefinition() { }
 
         public EntityField FindField(string fieldId)
         {

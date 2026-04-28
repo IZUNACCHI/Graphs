@@ -24,5 +24,7 @@ namespace NarrativeTool.Data.Graph.Nodes
             Inputs.Add(new PortData(InputPortId, "", PortDirection.Input, PortCapacity.Multi, "flow"));
             Outputs.Add(new PortData(OutputPortId, "", PortDirection.Output, PortCapacity.Single, "flow"));
         }
+
+        public DialogNodeData() : base() { }
     }
 }

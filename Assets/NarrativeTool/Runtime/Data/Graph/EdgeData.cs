@@ -8,11 +8,11 @@ namespace NarrativeTool.Data.Graph
     /// </summary>
     public sealed class Edge
     {
-        public string Id { get; }
-        public string FromNodeId { get; }
-        public string FromPortId { get; }
-        public string ToNodeId { get; }
-        public string ToPortId { get; }
+        public string Id { get;  set; }
+        public string FromNodeId { get; set; }
+        public string FromPortId { get; set; }
+        public string ToNodeId { get; set; }
+        public string ToPortId { get; set; }
 
         public string Label { get; set; } = "";
         public EdgeRoutingMode RoutingMode { get; set; } = EdgeRoutingMode.Bezier;
@@ -25,5 +25,7 @@ namespace NarrativeTool.Data.Graph
             FromNodeId = fromNodeId; FromPortId = fromPortId;
             ToNodeId = toNodeId; ToPortId = toPortId;
         }
+
+        public Edge() { }
     }
 }

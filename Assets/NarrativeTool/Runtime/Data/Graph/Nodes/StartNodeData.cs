@@ -20,5 +20,7 @@ namespace NarrativeTool.Data.Graph.Nodes
             Outputs.Add(new PortData(OutputPortId, "", PortDirection.Output,
                                  PortCapacity.Single, "flow"));
         }
+
+        public StartNodeData() : base() { }
     }
 }

@@ -1,4 +1,4 @@
-using NarrativeTool.Core.Commands;
+﻿using NarrativeTool.Core.Commands;
 using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Core.Selection;
 using NarrativeTool.Data.Graph;
@@ -35,6 +35,12 @@ namespace NarrativeTool.Data.Project
         public string ProjectPath { get; set; }
 
         /// <summary>
+        /// While true, all mutations (commands, node drags, renaming, canvas edits)
+        /// are blocked. Only navigation and read‑only interactions are allowed.
+        /// </summary>
+        public bool IsPlayMode { get; set; }
+
+        /// <summary>
         /// Undo stack for project-scoped operations (variables, entities,
         /// future global rename refactors). Independent from per-graph
         /// stacks so editing a variable doesn't pollute a graph's history.
@@ -45,6 +51,7 @@ namespace NarrativeTool.Data.Project
         public SessionState(EventBus bus)
         {
             this.bus = bus;
+            IsPlayMode = false;
         }
 
         public CommandSystem CommandsFor(GraphData graph)

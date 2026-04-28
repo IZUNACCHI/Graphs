@@ -38,9 +38,9 @@ namespace NarrativeTool.Core.Commands
             // (and its first member) so the picker doesn't show a phantom
             // selection that doesn't match the underlying data. The user can
             // then change the enum via SetVariableEnumTypeCmd.
-            if (newType == VariableType.Enum && project.Enums.Enums.Count > 0)
+            if (newType == VariableType.Enum && project.Enums.Items.Count > 0)
             {
-                this.newEnumTypeId = project.Enums.Enums[0].Id;
+                this.newEnumTypeId = project.Enums.Items[0].Id;
                 this.newDefault = project.Enums.FirstMemberId(this.newEnumTypeId);
             }
             else

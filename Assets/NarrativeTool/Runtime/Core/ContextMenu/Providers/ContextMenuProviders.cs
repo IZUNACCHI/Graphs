@@ -8,7 +8,6 @@ using NarrativeTool.Data.Graph.Nodes;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 namespace NarrativeTool.Core.ContextMenu
 {
@@ -57,8 +56,9 @@ namespace NarrativeTool.Core.ContextMenu
 
         private static void CreateNode(GraphView canvas, NodeTypeDescriptor desc, Vector2 worldPos)
         {
+            string title = NodeCreationHelper.UniqueTitle(canvas, desc);
             var node = desc.DataFactory(
-                $"{desc.TypeId}_{System.Guid.NewGuid():N}".Substring(0, 16), worldPos);
+                $"{desc.TypeId}_{System.Guid.NewGuid():N}".Substring(0, 16), worldPos, title);
             canvas.Commands.Execute(new AddNodeCmd(canvas.Graph, canvas.Bus, node));
             var view = canvas.GetNodeView(node.Id);
             if (view != null)
@@ -200,13 +200,14 @@ namespace NarrativeTool.Core.ContextMenu
         }
 
         private static void CreateAndConnect(GraphView canvas, PortView sourcePort,
-                                             NodeTypeDescriptor targetDesc,
-                                             Vector2 worldPos)
+                                     NodeTypeDescriptor targetDesc,
+                                     Vector2 worldPos)
         {
-            // Create node via registered factory
+            string title = NodeCreationHelper.UniqueTitle(canvas, targetDesc);
             var newNode = targetDesc.DataFactory(
                 $"{targetDesc.TypeId}_{System.Guid.NewGuid():N}".Substring(0, 16),
-                worldPos);
+                worldPos,
+                title);
 
             // Find a compatible port on the new node
             PortDefinition targetPortDef;
@@ -250,6 +251,20 @@ namespace NarrativeTool.Core.ContextMenu
             var nv = canvas.GetNodeView(newNode.Id);
             if (nv != null)
                 canvas.Selection.SelectOnly(nv);
+        }
+    }
+
+    // Place this at the bottom of your ContextMenuProviders.cs file,
+    // inside the same namespace, outside any existing class.
+
+    internal static class NodeCreationHelper
+    {
+        /// <summary>Returns a unique node title based on the descriptor's display name.</summary>
+        public static string UniqueTitle(GraphView canvas, NodeTypeDescriptor desc)
+        {
+            string baseName = desc.DisplayName;
+            int count = canvas.Graph.Nodes.Count(n => n.Title.StartsWith(baseName));
+            return count == 0 ? baseName : $"{baseName} {count + 1}";
         }
     }
 }

@@ -1,3 +1,4 @@
+using NarrativeTool.Core.Utility;
 using NarrativeTool.Data.Project;
 using System;
 using System.Collections.Generic;
@@ -155,7 +156,7 @@ namespace NarrativeTool.UI.Library
             thumb.AddToClassList("nt-library-card-thumb");
             thumb.style.backgroundColor = ThumbBg(entry.ThumbHueKey);
 
-            var stat = new Label($"{entry.NodeCount}n · {entry.EdgeCount}e");
+            var stat = new Label($"{entry.GraphCount} Graphs · {entry.NodeCount} Nodes");
             stat.AddToClassList("nt-library-card-stat");
             thumb.Add(stat);
             card.Add(thumb);
@@ -166,7 +167,7 @@ namespace NarrativeTool.UI.Library
             var name = new Label(entry.Name);
             name.AddToClassList("nt-library-card-name");
             info.Add(name);
-            var date = new Label(entry.OpenedDisplay ?? "");
+            var date = new Label(TimeUtils.RelativeTime(entry.LastOpened));
             date.AddToClassList("nt-library-card-date");
             info.Add(date);
 

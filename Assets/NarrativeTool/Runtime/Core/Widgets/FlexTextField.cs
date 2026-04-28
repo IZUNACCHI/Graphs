@@ -20,6 +20,9 @@ namespace NarrativeTool.Core.Widgets
         private float lastChangeTime;
         private bool suppressChange;
 
+        /// <summary>True while this field has keyboard focus (used by undo/redo updates).</summary>
+        public bool IsFocused => focusController?.focusedElement == this;
+
         public float BurstMergeSeconds { get; set; } = 0.2f;
 
         public FlexTextField(bool multiline = false) : this(null, multiline) { }
@@ -97,6 +100,8 @@ namespace NarrativeTool.Core.Widgets
                 e.StopPropagation();
             }
         }
+
+
 
         private void SetValueSilently(string v)
         {

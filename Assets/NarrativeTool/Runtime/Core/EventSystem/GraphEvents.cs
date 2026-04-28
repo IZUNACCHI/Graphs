@@ -2,6 +2,84 @@ using UnityEngine;
 
 namespace NarrativeTool.Core.EventSystem
 {
+    public readonly struct GraphAddedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string GraphId;
+        public GraphAddedEvent(string projectId, string graphId)
+        {
+            ProjectId = projectId;
+            GraphId = graphId;
+        }
+        public override string ToString() => $"{{ Graph={GraphId} added }}";
+    }
+
+    public readonly struct GraphRemovedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string GraphId;
+        public GraphRemovedEvent(string projectId, string graphId)
+        {
+            ProjectId = projectId;
+            GraphId = graphId;
+        }
+        public override string ToString() => $"{{ Graph={GraphId} removed }}";
+    }
+
+    public readonly struct GraphRenamedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string GraphId;
+        public readonly string OldName;
+        public readonly string NewName;
+        public GraphRenamedEvent(string projectId, string graphId, string oldName, string newName)
+        {
+            ProjectId = projectId;
+            GraphId = graphId;
+            OldName = oldName;
+            NewName = newName;
+        }
+        public override string ToString() => $"{{ Graph={GraphId}, \"{OldName}\" -> \"{NewName}\" }}";
+    }
+
+    public readonly struct GraphFolderAddedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string FolderPath;
+        public GraphFolderAddedEvent(string projectId, string folderPath)
+        {
+            ProjectId = projectId;
+            FolderPath = folderPath;
+        }
+        public override string ToString() => $"{{ GraphFolder \"{FolderPath}\" added }}";
+    }
+
+    public readonly struct GraphFolderRemovedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string FolderPath;
+        public GraphFolderRemovedEvent(string projectId, string folderPath)
+        {
+            ProjectId = projectId;
+            FolderPath = folderPath;
+        }
+        public override string ToString() => $"{{ GraphFolder \"{FolderPath}\" removed }}";
+    }
+
+    public readonly struct GraphFolderRenamedEvent
+    {
+        public readonly string ProjectId;
+        public readonly string OldPath;
+        public readonly string NewPath;
+        public GraphFolderRenamedEvent(string projectId, string oldPath, string newPath)
+        {
+            ProjectId = projectId;
+            OldPath = oldPath;
+            NewPath = newPath;
+        }
+        public override string ToString() => $"{{ GraphFolder \"{OldPath}\" -> \"{NewPath}\" }}";
+    }
+
     public readonly struct NodeAddedEvent
     {
         public readonly string GraphId;

@@ -6,6 +6,7 @@ using NarrativeTool.Core.Utilities;
 using NarrativeTool.Core.Widgets;
 using NarrativeTool.Data.Graph;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -29,6 +30,10 @@ namespace NarrativeTool.Canvas.Views
         protected readonly VisualElement outputsColumn;
         // Container for property editors generated from [EditableProperty] fields on the NodeData.
         protected readonly VisualElement extrasContainer;
+
+        // If the node is currently being renamed, this is the TextField used for editing the name. We keep a reference so we can check focus and update the title without interfering with user input.
+        private TextField renameField;
+        private bool isRenaming;
 
         protected readonly Dictionary<string, PortView> portViews = new();
 
@@ -110,6 +115,25 @@ namespace NarrativeTool.Canvas.Views
             header.AddManipulator(new DragNodeManipulator(this));
 
             RegisterCallback<PointerDownEvent>(OnPointerDown);
+            // Double‑click the header to rename
+            header.RegisterCallback<PointerDownEvent>(e =>
+            {
+                if (e.button == 0 && e.clickCount == 2)
+                {
+                    BeginRename();
+                    e.StopPropagation();
+                }
+            });
+
+            // F2 anywhere on the node (or header) also starts rename
+            RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (e.keyCode == KeyCode.F2 && !isRenaming)
+                {
+                    BeginRename();
+                    e.StopPropagation();
+                }
+            });
             RegisterCallback<DetachFromPanelEvent>(OnDetach);
 
             RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
@@ -260,6 +284,92 @@ namespace NarrativeTool.Canvas.Views
             NodeCategory.Data => "nt-header-data",
             _ => "nt-header-flow",
         };
+
+        private void BeginRename()
+        {
+            if (isRenaming) return;
+            isRenaming = true;
+
+            // Hide the title label
+            titleLabel.style.display = DisplayStyle.None;
+
+            // Create an inline text field
+            renameField = new TextField { value = Node.Title };
+            renameField.AddToClassList("nt-node-rename");
+            renameField.style.position = Position.Absolute;
+            // Place it roughly where the title label was
+            renameField.style.left = titleLabel.resolvedStyle.left;
+            renameField.style.top = titleLabel.resolvedStyle.top;
+            renameField.style.width = titleLabel.resolvedStyle.width + 10;
+            header.Add(renameField);
+
+            renameField.schedule.Execute(() =>
+            {
+                renameField.Focus();
+                renameField.SelectAll();
+            }).StartingIn(0);
+
+            renameField.RegisterCallback<BlurEvent>(_ => CommitRename());
+            renameField.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+                {
+                    CommitRename();
+                    e.StopPropagation();
+                }
+                else if (e.keyCode == KeyCode.Escape)
+                {
+                    CancelRename();
+                    e.StopPropagation();
+                }
+            });
+
+
+        }
+
+        private void CommitRename()
+        {
+            if (!isRenaming) return;
+            string newName = renameField.value.Trim();
+            if (string.IsNullOrEmpty(newName))
+                newName = Node.Title; // revert to original
+
+            // Prevent duplicate names within the same graph
+            if (newName != Node.Title && Canvas.Graph.Nodes.Any(n => n.Id != Node.Id && n.Title == newName))
+            {
+                Debug.LogWarning($"[NodeView] Name '{newName}' already exists in this graph.");
+                // Optionally flash the field or just revert silently
+                newName = Node.Title;
+            }
+
+            if (newName != Node.Title)
+            {
+                Canvas.Commands.Execute(new SetPropertyCommand(
+                    "Title",
+                    v => Node.Title = (string)v,
+                    Node.Title,
+                    newName,
+                    Canvas.Bus));
+            }
+
+            FinishRename();
+        }
+
+        private void CancelRename()
+        {
+            FinishRename();
+        }
+
+        private void FinishRename()
+        {
+            if (renameField != null)
+            {
+                renameField.RemoveFromHierarchy();
+                renameField = null;
+            }
+            titleLabel.style.display = DisplayStyle.Flex;
+            isRenaming = false;
+        }
     }
 
     public sealed class NodeContextTarget

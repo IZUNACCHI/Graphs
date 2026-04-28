@@ -30,9 +30,11 @@ namespace NarrativeTool.Data.Graph.Nodes
         public ChoiceNodeData(string id, string title, Vector2 position)
             : base(id, title, NodeCategory.Flow, position)
         {
-            Inputs.Add(new PortData(InputPortId, "", PortDirection.Input, PortCapacity.Multi, "flow"));
+            Inputs.Add(new PortData(InputPortId, "", PortDirection.Input, PortCapacity.Single, "flow"));
             // Outputs are added dynamically with each option
         }
+
+        public ChoiceNodeData() : base() { }
 
 
         public static ChoiceOption MakeOption(string text = "")

@@ -1,63 +1,103 @@
-using NarrativeTool.Core.ContextMenu;
+﻿using NarrativeTool.Core.ContextMenu;
 using NarrativeTool.Data.Project;
 using NarrativeTool.UI.Entities;
+using NarrativeTool.UI.Graphs;
 using NarrativeTool.UI.Variables;
+using System;
 using UnityEngine.UIElements;
 
 namespace NarrativeTool.UI
 {
-    /// <summary>
-    /// Left-hand sidebar that hosts the Variables and Entities tabs and
-    /// switches between their panels. Each panel binds to the same
-    /// ProjectModel/SessionState; only one is visible at a time.
-    /// </summary>
     public sealed class ProjectSidebar : VisualElement
     {
+        // Top zone — Graphs
+        private GraphsPanel graphsPanel;
+
+        // Bottom zone — Tabbed panels
+        private readonly VisualElement bottomSection;
         private readonly Label variablesTab;
         private readonly Label entitiesTab;
         private readonly VariablesPanel variablesPanel;
         private readonly EntitiesPanel entitiesPanel;
 
+        public event Action<LazyGraph> OnGraphDoubleClicked;
+
         public ProjectSidebar()
         {
-            AddToClassList("nt-vars");
+            AddToClassList("nt-sidebar");
             style.flexDirection = FlexDirection.Column;
 
-            var tabs = new VisualElement();
-            tabs.AddToClassList("nt-vars-tabs");
-            variablesTab = new Label("Variables");
-            variablesTab.AddToClassList("nt-vars-tab");
-            entitiesTab = new Label("Entities");
-            entitiesTab.AddToClassList("nt-vars-tab");
-            tabs.Add(variablesTab);
-            tabs.Add(entitiesTab);
-            Add(tabs);
+            // ─── Top half: Graphs panel ───
+            graphsPanel = new GraphsPanel();
+            graphsPanel.AddToClassList("nt-sidebar-section");
+            graphsPanel.style.flexGrow = 1;           // takes half the height
+            Add(graphsPanel);
 
+            // ─── Bottom half: Tabbed panels ───
+            bottomSection = new VisualElement();
+            bottomSection.AddToClassList("nt-sidebar-bottom");
+            bottomSection.style.flexGrow = 1;         // takes the other half
+            Add(bottomSection);
+
+            // Tab bar
+            var tabBar = new VisualElement();
+            tabBar.AddToClassList("nt-sidebar-tabbar");
+            variablesTab = BuildTab("Variables");
+            entitiesTab = BuildTab("Entities");
+            tabBar.Add(variablesTab);
+            tabBar.Add(entitiesTab);
+            bottomSection.Add(tabBar);
+
+            // Panels
             variablesPanel = new VariablesPanel();
             variablesPanel.style.flexGrow = 1;
             entitiesPanel = new EntitiesPanel();
             entitiesPanel.style.flexGrow = 1;
-            Add(variablesPanel);
-            Add(entitiesPanel);
+            
 
-            variablesTab.RegisterCallback<ClickEvent>(_ => Switch(showVariables: true));
-            entitiesTab.RegisterCallback<ClickEvent>(_ => Switch(showVariables: false));
+            bottomSection.Add(variablesPanel);
+            bottomSection.Add(entitiesPanel);
 
-            Switch(showVariables: true);
+            // Tab click handlers
+            variablesTab.RegisterCallback<ClickEvent>(_ => SwitchTab("variables"));
+            entitiesTab.RegisterCallback<ClickEvent>(_ => SwitchTab("entities"));
+
+            // Default tab
+            SwitchTab("variables");
+        }
+
+        private static Label BuildTab(string text)
+        {
+            var tab = new Label(text);
+            tab.AddToClassList("nt-sidebar-tab");
+            return tab;
+        }
+
+        private void SwitchTab(string id)
+        {
+            variablesPanel.style.display = id == "variables" ? DisplayStyle.Flex : DisplayStyle.None;
+            entitiesPanel.style.display = id == "entities" ? DisplayStyle.Flex : DisplayStyle.None;
+
+            variablesTab.EnableInClassList("nt-sidebar-tab--active", id == "variables");
+            entitiesTab.EnableInClassList("nt-sidebar-tab--active", id == "entities");
         }
 
         public void Bind(ProjectModel project, SessionState session, ContextMenuController contextMenu)
         {
+            // Bind the graphs panel at the top
+            graphsPanel.Bind(project, session, contextMenu);
+            graphsPanel.OnGraphDoubleClicked += lazy => OnGraphDoubleClicked?.Invoke(lazy);
+
+            // Bind the tab panels at the bottom
             variablesPanel.Bind(project, session, contextMenu);
             entitiesPanel.Bind(project, session, contextMenu);
+            // Enums panel binding will go here once it’s a real panel
         }
 
-        private void Switch(bool showVariables)
+        /// <summary>Refresh just the graph list (e.g., after external change).</summary>
+        public void RefreshGraphs()
         {
-            variablesPanel.style.display = showVariables ? DisplayStyle.Flex : DisplayStyle.None;
-            entitiesPanel.style.display = showVariables ? DisplayStyle.None : DisplayStyle.Flex;
-            variablesTab.EnableInClassList("nt-vars-tab--active", showVariables);
-            entitiesTab.EnableInClassList("nt-vars-tab--active", !showVariables);
+            graphsPanel?.Refresh();
         }
     }
 }

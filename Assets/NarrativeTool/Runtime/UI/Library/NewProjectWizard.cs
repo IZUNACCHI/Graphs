@@ -28,7 +28,7 @@ namespace NarrativeTool.UI.Library
         // Step state
         private int step = 1;
         private string projectName = "Untitled Project";
-        private string saveLocation = "/projects/untitled/";
+        private string saveLocation = "/projects/";
         private readonly HashSet<string> selectedLocales = new() { "en-US" };
 
         // UI
@@ -191,13 +191,11 @@ namespace NarrativeTool.UI.Library
 
         private void BuildTemplateBody()
         {
-            // TODO templates: full template gallery (Blank / Visual Novel /
-            // RPG Dialogue / Branching) with descriptions and pre-wired
+            // TODO templates: full template gallery with descriptions and pre-wired
             // example graphs/variables. For now this step is a stub — Next
             // simply advances to locales without setting any template.
             var hint = new Label(
-                "Templates will live here (Blank / Visual Novel / RPG Dialogue / " +
-                "Branching). For now the project starts blank.");
+                "Templates will live here . For now the project starts blank.");
             hint.AddToClassList("nt-wiz-hint");
             bodyHost.Add(hint);
 
@@ -207,10 +205,11 @@ namespace NarrativeTool.UI.Library
             bodyHost.Add(stub);
         }
 
+        //TODO: this locale selector is just visual for now
         private void BuildLocalesBody()
         {
             var hint = new Label(
-                "Select the locales this project will support. " +
+                "TODO: Select the locales this project will support. " +
                 "Additional locales can be added later from Project Settings.");
             hint.AddToClassList("nt-wiz-hint");
             bodyHost.Add(hint);

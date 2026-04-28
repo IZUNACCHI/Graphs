@@ -11,6 +11,12 @@ namespace NarrativeTool.Data.Graph
     {
         public Vector2 Position;
 
+        public WaypointData()
+        {
+        }
+
         public WaypointData(Vector2 position) { Position = position; }
+    
+
     }
 }

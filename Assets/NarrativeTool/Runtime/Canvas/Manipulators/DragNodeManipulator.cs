@@ -1,5 +1,7 @@
 using NarrativeTool.Canvas.Views;
 using NarrativeTool.Core.Commands;
+using NarrativeTool.Core.Selection;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -21,7 +23,9 @@ namespace NarrativeTool.Canvas.Manipulators
 
         private Vector2 armedPointerScreenStart;
         private Vector2 dragStartMouseWorld;
-        private Vector2 dragStartNodePosition;
+        private readonly Dictionary<NodeView, Vector2> dragGroup = new();
+        private readonly Dictionary<WaypointSelectable, Vector2> waypointGroup = new();
+
 
         public DragNodeManipulator(NodeView nv) { nodeView = nv; }
 
@@ -61,14 +65,16 @@ namespace NarrativeTool.Canvas.Manipulators
 
                 phase = Phase.Dragging;
                 dragStartMouseWorld = CanvasLocalToWorld(e);
-                dragStartNodePosition = nodeView.Node.Position;
+                BuildDragGroups();
             }
 
-            var currentWorld = CanvasLocalToWorld(e);
-            var delta = currentWorld - dragStartMouseWorld;
-            var newVisualPos = dragStartNodePosition + delta;
+            var delta = CanvasLocalToWorld(e) - dragStartMouseWorld;
 
-            nodeView.SetVisualPosition(newVisualPos);
+            foreach (var kv in dragGroup)
+                kv.Key.SetVisualPosition(kv.Value + delta);
+
+            foreach (var kv in waypointGroup)
+                kv.Key.EdgeView.Edge.Waypoints[kv.Key.Index].Position = kv.Value + delta;
             nodeView.Canvas.EdgeLayer.RefreshAll();
             e.StopPropagation();
         }
@@ -84,20 +90,83 @@ namespace NarrativeTool.Canvas.Manipulators
 
             if (!wasDragging) return;
 
-            var finalPos = nodeView.GetVisualPosition();
-            if (finalPos == dragStartNodePosition)
+            var canvas = nodeView.Canvas;
+            bool anyMoved = false;
+
+            foreach (var kv in dragGroup)
+                if (kv.Key.GetVisualPosition() != kv.Value) { anyMoved = true; break; }
+
+            if (!anyMoved)
+                foreach (var kv in waypointGroup)
+                    if (kv.Key.EdgeView.Edge.Waypoints[kv.Key.Index].Position != kv.Value) { anyMoved = true; break; }
+
+            if (!anyMoved)
             {
-                nodeView.SyncPositionFromData();
-                nodeView.Canvas.EdgeLayer.MarkDirtyRepaint();
+                foreach (var kv in dragGroup) kv.Key.SyncPositionFromData();
+
+                foreach (var kv in waypointGroup)
+                    kv.Key.EdgeView.Edge.Waypoints[kv.Key.Index].Position = kv.Value;
+
+                canvas.EdgeLayer.MarkDirtyRepaint();
+                dragGroup.Clear();
+                waypointGroup.Clear();
                 e.StopPropagation();
                 return;
             }
 
-            var canvas = nodeView.Canvas;
-            canvas.Commands.Execute(new MoveNodeCmd(
-                canvas.Graph, canvas.Bus, nodeView.Node.Id,
-                dragStartNodePosition, finalPos));
+            using (canvas.Commands.BeginTransaction("Move selection"))
+            {
+                foreach (var kv in dragGroup)
+                {
+                    var finalPos = kv.Key.GetVisualPosition();
+                    if (finalPos == kv.Value) continue;
+                    canvas.Commands.Execute(new MoveNodeCmd(
+                        canvas.Graph, canvas.Bus, kv.Key.Node.Id,
+                        kv.Value, finalPos));
+                }
+            }
+
+
+            foreach (var kv in waypointGroup)
+            {
+                var wp = kv.Key;
+                var finalPos = wp.EdgeView.Edge.Waypoints[wp.Index].Position;
+                if (finalPos == kv.Value) continue;
+                wp.EdgeView.Edge.Waypoints[wp.Index].Position = kv.Value;
+                canvas.Commands.Execute(new MoveWaypointCmd(
+                    canvas.Graph, canvas.Bus, wp.EdgeView.Edge.Id,
+                    wp.Index, kv.Value, finalPos));
+            }
+
+
+
+            dragGroup.Clear();
+            waypointGroup.Clear();
             e.StopPropagation();
+        }
+        private void BuildDragGroups()
+        {
+            dragGroup.Clear();
+            waypointGroup.Clear();
+
+            var canvas = nodeView.Canvas;
+            var selection = canvas.Selection;
+
+            if (selection != null && selection.IsSelected(nodeView) && selection.Count > 1)
+            {
+                foreach (var selectable in selection.Selected)
+                {
+                    if (selectable is NodeView nv)
+                        dragGroup[nv] = nv.Node.Position;
+                    else if (selectable is WaypointSelectable wp)
+                        waypointGroup[wp] = wp.EdgeView.Edge.Waypoints[wp.Index].Position;
+                }
+
+            }
+
+            // Always include the dragged node (covers unselected drag too).
+            if (!dragGroup.ContainsKey(nodeView))
+                dragGroup[nodeView] = nodeView.Node.Position;
         }
 
         private Vector2 CanvasLocalToWorld(IPointerEvent e)

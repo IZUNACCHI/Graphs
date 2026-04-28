@@ -111,9 +111,9 @@ namespace NarrativeTool.Core.Commands
             this.oldDefault = oldDefault; this.oldEnumTypeId = oldEnumTypeId;
             // Auto-bind to the first available enum when switching to Enum
             // so the picker isn't phantom-selected. Mirrors SetVariableTypeCmd.
-            if (newType == VariableType.Enum && project.Enums.Enums.Count > 0)
+            if (newType == VariableType.Enum && project.Enums.Items.Count > 0)
             {
-                this.newEnumTypeId = project.Enums.Enums[0].Id;
+                this.newEnumTypeId = project.Enums.Items[0].Id;
                 this.newDefault = project.Enums.FirstMemberId(this.newEnumTypeId);
             }
             else

@@ -11,9 +11,11 @@ namespace NarrativeTool.Core.Commands
     /// </summary>
     public sealed class CommandSystem
     {
-        private readonly Stack<ICommand> undo = new();
-        private readonly Stack<ICommand> redo = new();
-        private Transaction activeTransaction;
+
+        public event Action OnHistoryChanged; // raised after any change to the undo/redo stacks, to track dirty state
+        private readonly Stack<ICommand> undo = new(); // LIFO stack of executed commands for undo
+        private readonly Stack<ICommand> redo = new(); // LIFO stack of undone commands for redo
+        private Transaction activeTransaction; // currently open transaction, if any
 
         public int UndoCount => undo.Count;
         public int RedoCount => redo.Count;
@@ -42,6 +44,7 @@ namespace NarrativeTool.Core.Commands
                     undo.Push(cmd);
                     redo.Clear();
                     Debug.Log($"[Cmd] {cmd.Name} merged — stack size: {undo.Count}");
+                    OnHistoryChanged?.Invoke(); 
                     return;
                 }
             }
@@ -49,6 +52,7 @@ namespace NarrativeTool.Core.Commands
             undo.Push(cmd);
             redo.Clear();
             Debug.Log($"[Cmd] {cmd.Name} executed — stack size: {undo.Count}");
+            OnHistoryChanged?.Invoke();
         }
 
         public void Undo()
@@ -58,6 +62,7 @@ namespace NarrativeTool.Core.Commands
             cmd.Undo();
             redo.Push(cmd);
             Debug.Log($"[Cmd] Undo {cmd.Name}");
+            OnHistoryChanged?.Invoke();
         }
 
         public void Redo()
@@ -67,6 +72,7 @@ namespace NarrativeTool.Core.Commands
             cmd.Do();
             undo.Push(cmd);
             Debug.Log($"[Cmd] Redo {cmd.Name}");
+            OnHistoryChanged?.Invoke();
         }
 
         public IDisposable BeginTransaction(string name)

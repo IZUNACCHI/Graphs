@@ -28,6 +28,7 @@ namespace NarrativeTool.Canvas.Manipulators
 
         public PanZoomManipulator(GraphView canvas) { this.canvas = canvas; }
 
+
         protected override void RegisterCallbacksOnTarget()
         {
             target.RegisterCallback<PointerDownEvent>(OnPointerDown);
@@ -92,6 +93,13 @@ namespace NarrativeTool.Canvas.Manipulators
             canvas.ContentLayer.style.translate = new Translate(panOffset.x, panOffset.y, 0f);
             canvas.ContentLayer.style.scale = new Scale(new Vector3(zoom, zoom, 1f));
             canvas.EdgeLayer.MarkDirtyRepaint();
+        }
+
+        /// <summary>Shift the view by the given screen‑space delta.</summary>
+        public void Pan(Vector2 delta)
+        {
+            panOffset += delta;
+            ApplyTransform();
         }
     }
 }

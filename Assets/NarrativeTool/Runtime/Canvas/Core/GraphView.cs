@@ -1,4 +1,4 @@
-using NarrativeTool.Canvas.Manipulators;
+ï»¿using NarrativeTool.Canvas.Manipulators;
 using NarrativeTool.Canvas.Views;
 using NarrativeTool.Core;
 using NarrativeTool.Core.Commands;
@@ -7,6 +7,7 @@ using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Core.Selection;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Project;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -35,6 +36,12 @@ namespace NarrativeTool.Canvas
         public ContextMenuController ContextMenu => contextMenu;
         public SessionState Session => session;
 
+        /// <summary>Fired when a subgraph node is doubleâ€‘clicked, requesting navigation.</summary>
+        public event Action<string> OnNavigateToGraph;
+
+        /// <summary>Requests navigation to a specific node. The tab manager can handle this.</summary>
+        public event Action<string> OnNavigateToNode;
+
         public GraphView()
         {
             AddToClassList("nt-canvas");
@@ -54,12 +61,14 @@ namespace NarrativeTool.Canvas
             EdgeLayer.style.position = Position.Absolute;
             EdgeLayer.style.left = 0;
             EdgeLayer.style.top = 0;
-            // EdgeLayer itself does not pick — per-edge EdgeViews do.
+            // EdgeLayer itself does not pick â€” per-edge EdgeViews do.
             EdgeLayer.pickingMode = PickingMode.Ignore;
             ContentLayer.Add(EdgeLayer);
 
             Camera = new PanZoomManipulator(this);
             this.AddManipulator(Camera);
+
+            this.AddManipulator(new MarqueeManipulator(this));
 
             RegisterCallback<PointerDownEvent>(OnCanvasPointerDown);
             RegisterCallback<KeyDownEvent>(OnKeyDown);
@@ -90,10 +99,15 @@ namespace NarrativeTool.Canvas
 
             ReconcileSelectionAfterRebind();
 
-            EdgeLayer.Bind(graph, nodeViews);
+            // Wait one frame so the node views have had a layout pass and their ports are correctly positioned.
+            schedule.Execute(() =>
+            {
+                EdgeLayer.Bind(graph, nodeViews);
+                // After edge views are built, attach waypoint manipulators.
+                InstallEdgeInteractors();
+            }).StartingIn(0);
 
-            // After edge views are built, attach waypoint manipulators.
-            InstallEdgeInteractors();
+            
 
             bus.Subscribe<NodeMovedEvent>(OnNodeMoved);
             bus.Subscribe<NodeAddedEvent>(OnNodeAdded);
@@ -130,9 +144,37 @@ namespace NarrativeTool.Canvas
                 if (s is NodeView nv && nodeViews.TryGetValue(nv.Node.Id, out var current))
                     revived.Add(current);
                 // EdgeView / WaypointSelectable from prior binds are not
-                // carried over — edge views are rebuilt from scratch.
+                // carried over â€” edge views are rebuilt from scratch.
             }
             if (revived.Count > 0) selection.ApplyDirect(revived);
+        }
+
+        public void NavigateToGraph(string graphId)
+        {
+            OnNavigateToGraph?.Invoke(graphId);
+        }
+
+        public void NavigateToNode(string nodeId)
+        {
+            OnNavigateToNode?.Invoke(nodeId);
+        }
+
+        /// <summary>
+        /// Pans the canvas so that the node with the given ID is roughly centred.
+        /// </summary>
+        public void FrameNode(string nodeId)
+        {
+            if (!nodeViews.TryGetValue(nodeId, out var view)) return;
+
+            var worldCenter = new Vector2(
+                view.resolvedStyle.left + view.resolvedStyle.width * 0.5f,
+                view.resolvedStyle.top + view.resolvedStyle.height * 0.5f);
+            var screenCenter = WorldToScreen(worldCenter);
+
+            var viewportCenter = new Vector2(contentRect.width * 0.5f, contentRect.height * 0.5f);
+            var delta = viewportCenter - screenCenter;
+
+            Camera.Pan(delta);   // uses the new public method
         }
 
         private void AddNodeView(NodeData node)
@@ -152,7 +194,7 @@ namespace NarrativeTool.Canvas
             if (nodeViews.TryGetValue(e.NodeId, out var view))
             {
                 view.SyncPositionFromData();
-                // Reroute every edge — cheap, at most all edges.
+                // Reroute every edge â€” cheap, at most all edges.
                 EdgeLayer.RefreshAll();
             }
         }
@@ -233,7 +275,7 @@ namespace NarrativeTool.Canvas
             if (graph == null || e.GraphId != graph.Id) return;
             var ev = EdgeLayer.Get(e.EdgeId);
             if (ev == null) return;
-            // Waypoint list shifted — invalidate any cached selectables for
+            // Waypoint list shifted â€” invalidate any cached selectables for
             // this edge since indices may have moved.
             WaypointSelectable.InvalidateEdge(ev);
             ev.RefreshBounds();
@@ -276,6 +318,8 @@ namespace NarrativeTool.Canvas
             nodeViews.TryGetValue(nodeId, out var v);
             return v;
         }
+
+        public IEnumerable<NodeView> NodeViews() => nodeViews.Values;
 
         // ---------- Canvas-level input ----------
 
@@ -347,7 +391,7 @@ namespace NarrativeTool.Canvas
 
 
         /// <summary>
-        /// Delete everything selected — nodes, edges, and waypoints — as a
+        /// Delete everything selected â€” nodes, edges, and waypoints â€” as a
         /// single transaction.
         /// </summary>
         public void DeleteSelected()
@@ -356,7 +400,7 @@ namespace NarrativeTool.Canvas
 
             // Snapshot then group by kind so we can order deletions sensibly
             // (remove waypoints first so their indices are still valid when
-            // we hit them, then edges, then nodes — nodes cascade-remove
+            // we hit them, then edges, then nodes â€” nodes cascade-remove
             // their remaining edges).
             var snapshot = selection.Snapshot();
             var waypoints = new List<WaypointSelectable>();

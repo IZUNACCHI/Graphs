@@ -1,8 +1,10 @@
 using NarrativeTool.Core.Commands;
+using NarrativeTool.Core.Commands.Generic;
 using NarrativeTool.Core.ContextMenu;
 using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Data.Project;
 using NarrativeTool.UI.FolderTree;
+using NarrativeTool.UI.Widgets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,11 +13,6 @@ using UnityEngine.UIElements;
 
 namespace NarrativeTool.UI.Entities
 {
-    /// <summary>
-    /// Sidebar content for user-defined types: entities (struct-like, with
-    /// fields) and enums (with members). Entities and enums each get their
-    /// own folder tree so users can organize them independently.
-    /// </summary>
     public sealed class EntitiesPanel : VisualElement
     {
         private ProjectModel project;
@@ -36,7 +33,7 @@ namespace NarrativeTool.UI.Entities
 
         public EntitiesPanel()
         {
-            AddToClassList("nt-vars");      // share base sidebar styles
+            AddToClassList("nt-vars");
             focusable = true;
 
             // Filter row
@@ -56,14 +53,26 @@ namespace NarrativeTool.UI.Entities
             // Entities section
             var entitiesHeader = BuildSectionHeader("Entities", () => AddEntity(""));
             Add(entitiesHeader);
-            entityTree = BuildEntityTree();
+            entityTree = new FolderTreeView
+            {
+                ShowSearchBar = false,
+                RootDisplayName = null,
+                BuildItemHeader = it => BuildEntityHeader((EntityDefinition)it),
+                BuildItemDetail = it => BuildEntityEditor((EntityDefinition)it),
+            };
             Add(entityTree);
 
             // Enums section
             var enumsHeader = BuildSectionHeader("Enums", () => AddEnum(""));
             enumsHeader.AddToClassList("nt-vars-section--second");
             Add(enumsHeader);
-            enumTree = BuildEnumTree();
+            enumTree = new FolderTreeView
+            {
+                ShowSearchBar = false,
+                RootDisplayName = null,
+                BuildItemHeader = it => BuildEnumHeader((EnumDefinition)it),
+                BuildItemDetail = it => BuildEnumEditor((EnumDefinition)it),
+            };
             Add(enumTree);
 
             RegisterCallback<KeyDownEvent>(OnKeyDown);
@@ -77,7 +86,13 @@ namespace NarrativeTool.UI.Entities
             this.contextMenu = contextMenu;
             this.bus = session.Bus;
 
-            // Entity events
+            // ── Wire entity tree ──
+            WireEntityTree();
+
+            // ── Wire enum tree ──
+            WireEnumTree();
+
+            // ── Event subscriptions ──
             subs.Add(bus.Subscribe<EntityAddedEvent>(_ => RebuildAll()));
             subs.Add(bus.Subscribe<EntityRemovedEvent>(e =>
             {
@@ -90,7 +105,6 @@ namespace NarrativeTool.UI.Entities
             subs.Add(bus.Subscribe<EntityFolderRemovedEvent>(_ => RebuildAll()));
             subs.Add(bus.Subscribe<EntityFolderRenamedEvent>(_ => RebuildAll()));
 
-            // Enum events
             subs.Add(bus.Subscribe<EnumAddedEvent>(_ => RebuildAll()));
             subs.Add(bus.Subscribe<EnumRemovedEvent>(e =>
             {
@@ -110,6 +124,168 @@ namespace NarrativeTool.UI.Entities
         {
             foreach (var s in subs) s?.Dispose();
             subs.Clear();
+
+            // Dismiss any open modals
+            foreach (var child in Children().OfType<ModalConfirm>().ToList())
+                child.RemoveFromHierarchy();
+
+            // Clear entity tree
+            if (entityTree != null)
+            {
+                entityTree.GetFolders = null;
+                entityTree.GetItems = null;
+                entityTree.GetItemFolder = null;
+                entityTree.GetItemId = null;
+                entityTree.GetItemSearchText = null;
+                entityTree.OnItemClicked = null;
+                entityTree.OnItemDoubleClicked = null;
+                entityTree.OnItemContextMenu = null;
+                entityTree.OnFolderContextMenu = null;
+                entityTree.OnEmptyContextMenu = null;
+                entityTree.OnFolderRenameCommit = null;
+                entityTree.OnItemMoved = null;
+                entityTree.OnFolderMoved = null;
+                entityTree.AllowDragDrop = false;
+                entityTree.Rebuild();
+            }
+
+            // Clear enum tree
+            if (enumTree != null)
+            {
+                enumTree.GetFolders = null;
+                enumTree.GetItems = null;
+                enumTree.GetItemFolder = null;
+                enumTree.GetItemId = null;
+                enumTree.GetItemSearchText = null;
+                enumTree.OnItemClicked = null;
+                enumTree.OnItemDoubleClicked = null;
+                enumTree.OnItemContextMenu = null;
+                enumTree.OnFolderContextMenu = null;
+                enumTree.OnEmptyContextMenu = null;
+                enumTree.OnFolderRenameCommit = null;
+                enumTree.OnItemMoved = null;
+                enumTree.OnFolderMoved = null;
+                enumTree.AllowDragDrop = false;
+                enumTree.Rebuild();
+            }
+        }
+
+        private void WireEntityTree()
+        {
+            entityTree.GetFolders = () => (IReadOnlyList<string>)(project?.Entities.Folders) ?? Array.Empty<string>();
+            entityTree.GetItems = () => project?.Entities.Items.Cast<object>() ?? Enumerable.Empty<object>();
+            entityTree.GetItemFolder = it => ((EntityDefinition)it).FolderPath;
+            entityTree.GetItemId = it => ((EntityDefinition)it).Id;
+            entityTree.GetItemSearchText = it => { var e = (EntityDefinition)it; return e.Name + " " + e.FolderPath; };
+
+            entityTree.OnItemClicked = it => SelectEntity(((EntityDefinition)it).Id, toggle: true);
+            entityTree.OnItemContextMenu = (it, pos) =>
+            {
+                var e = (EntityDefinition)it;
+                SelectEntity(e.Id, toggle: false);
+                contextMenu?.Open(new EntityContextTarget(this, e), pos);
+            };
+            entityTree.OnFolderContextMenu = (folder, pos) =>
+                contextMenu?.Open(new EntityFolderContextTarget(this, folder), pos);
+            entityTree.OnEmptyContextMenu = (parent, pos) =>
+                contextMenu?.Open(new EntityFolderContextTarget(this, parent), pos);
+            entityTree.OnFolderRenameCommit = (oldPath, newPath) =>
+            {
+                if (project.Entities.Folders.Contains(newPath))
+                { Debug.LogWarning($"[Entities] Folder '{newPath}' already exists."); RebuildAll(); return; }
+                Commands.Execute(new RenameFolderCmd<EntityDefinition>(
+                    "Entity",
+                    project.Entities,
+                    oldPath, newPath,
+                    onRename: (o, n) => bus.Publish(new EntityFolderRenamedEvent(project.Id, o, n)),
+                    onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                ));
+            };
+
+            // Drag‑and‑drop
+            entityTree.AllowDragDrop = true;
+            entityTree.OnItemMoved = (item, newFolder) =>
+            {
+                var entity = (EntityDefinition)item;
+                if (entity.FolderPath == newFolder) return;
+                Commands.Execute(new MoveItemCmd<EntityDefinition>(
+                    "Entity", entity, project.Entities,
+                    entity.FolderPath, newFolder,
+                    doPublish: () => { }, undoPublish: () => { }
+                ));
+                RebuildAll();
+            };
+            entityTree.OnFolderMoved = (folderPath, newParent) =>
+            {
+                string folderName = folderPath.Split('/').Last();
+                string newPath = string.IsNullOrEmpty(newParent) ? folderName : newParent + "/" + folderName;
+                Commands.Execute(new RenameFolderCmd<EntityDefinition>(
+                    "Entity", project.Entities,
+                    folderPath, newPath,
+                    onRename: (o, n) => { },
+                    onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                ));
+                RebuildAll();
+            };
+        }
+
+        private void WireEnumTree()
+        {
+            enumTree.GetFolders = () => (IReadOnlyList<string>)(project?.Enums.Folders) ?? Array.Empty<string>();
+            enumTree.GetItems = () => project?.Enums.Items.Cast<object>() ?? Enumerable.Empty<object>();
+            enumTree.GetItemFolder = it => ((EnumDefinition)it).FolderPath;
+            enumTree.GetItemId = it => ((EnumDefinition)it).Id;
+            enumTree.GetItemSearchText = it => { var e = (EnumDefinition)it; return e.Name + " " + e.FolderPath; };
+
+            enumTree.OnItemClicked = it => SelectEnum(((EnumDefinition)it).Id, toggle: true);
+            enumTree.OnItemContextMenu = (it, pos) =>
+            {
+                var e = (EnumDefinition)it;
+                SelectEnum(e.Id, toggle: false);
+                contextMenu?.Open(new EnumContextTarget(this, e), pos);
+            };
+            enumTree.OnFolderContextMenu = (folder, pos) =>
+                contextMenu?.Open(new EnumFolderContextTarget(this, folder), pos);
+            enumTree.OnEmptyContextMenu = (parent, pos) =>
+                contextMenu?.Open(new EnumFolderContextTarget(this, parent), pos);
+            enumTree.OnFolderRenameCommit = (oldPath, newPath) =>
+            {
+                if (project.Enums.Folders.Contains(newPath))
+                { Debug.LogWarning($"[Enums] Folder '{newPath}' already exists."); RebuildAll(); return; }
+                Commands.Execute(new RenameFolderCmd<EnumDefinition>(
+                    "Enum",
+                    project.Enums,
+                    oldPath, newPath,
+                    onRename: (o, n) => bus.Publish(new EnumFolderRenamedEvent(project.Id, o, n)),
+                    onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                ));
+            };
+
+            // Drag‑and‑drop
+            enumTree.AllowDragDrop = true;
+            enumTree.OnItemMoved = (item, newFolder) =>
+            {
+                var enumDef = (EnumDefinition)item;
+                if (enumDef.FolderPath == newFolder) return;
+                Commands.Execute(new MoveItemCmd<EnumDefinition>(
+                    "Enum", enumDef, project.Enums,
+                    enumDef.FolderPath, newFolder,
+                    doPublish: () => { }, undoPublish: () => { }
+                ));
+                RebuildAll();
+            };
+            enumTree.OnFolderMoved = (folderPath, newParent) =>
+            {
+                string folderName = folderPath.Split('/').Last();
+                string newPath = string.IsNullOrEmpty(newParent) ? folderName : newParent + "/" + folderName;
+                Commands.Execute(new RenameFolderCmd<EnumDefinition>(
+                    "Enum", project.Enums,
+                    folderPath, newPath,
+                    onRename: (o, n) => { },
+                    onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                ));
+                RebuildAll();
+            };
         }
 
         private CommandSystem Commands => session.ProjectCommands;
@@ -124,15 +300,17 @@ namespace NarrativeTool.UI.Entities
 
         private FolderTreeView BuildEntityTree()
         {
-            return new FolderTreeView
+            var tree = new FolderTreeView
             {
+               
                 GetFolders = () => project?.Entities.Folders ?? (IReadOnlyList<string>)Array.Empty<string>(),
-                GetItems = () => project?.Entities.Entities.Cast<object>() ?? Enumerable.Empty<object>(),
+                GetItems = () => project?.Entities.Items.Cast<object>() ?? Enumerable.Empty<object>(),
                 GetItemFolder = it => ((EntityDefinition)it).FolderPath,
                 GetItemId = it => ((EntityDefinition)it).Id,
                 GetItemSearchText = it => { var e = (EntityDefinition)it; return e.Name + " " + e.FolderPath; },
                 BuildItemHeader = it => BuildEntityHeader((EntityDefinition)it),
                 BuildItemDetail = it => BuildEntityEditor((EntityDefinition)it),
+
                 OnItemClicked = it => SelectEntity(((EntityDefinition)it).Id, toggle: true),
                 OnItemContextMenu = (it, pos) =>
                 {
@@ -146,19 +324,55 @@ namespace NarrativeTool.UI.Entities
                     contextMenu?.Open(new EntityFolderContextTarget(this, parent), pos),
                 OnFolderRenameCommit = (oldPath, newPath) =>
                 {
-                    if (project.Entities.FolderExists(newPath))
+                    if (project.Entities.Folders.Contains(newPath))
                     { Debug.LogWarning($"[Entities] Folder '{newPath}' already exists."); RebuildAll(); return; }
-                    Commands.Execute(new RenameEntityFolderCmd(project, bus, oldPath, newPath));
+                    Commands.Execute(new RenameFolderCmd<EntityDefinition>(
+                        "Entity",
+                        project.Entities,
+                        oldPath, newPath,
+                        onRename: (o, n) => bus.Publish(new EntityFolderRenamedEvent(project.Id, o, n)),
+                        onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                    ));
                 },
             };
+
+            // ─── Drag‑and‑drop (added after initializer) ───
+            tree.AllowDragDrop = true;
+
+            tree.OnItemMoved = (item, newFolder) =>
+            {
+                var entity = (EntityDefinition)item;
+                if (entity.FolderPath == newFolder) return;
+                Commands.Execute(new MoveItemCmd<EntityDefinition>(
+                    "Entity", entity, project.Entities,
+                    entity.FolderPath, newFolder,
+                    doPublish: () => { }, undoPublish: () => { }
+                ));
+                RebuildAll();
+            };
+
+            tree.OnFolderMoved = (folderPath, newParent) =>
+            {
+                string folderName = folderPath.Split('/').Last();
+                string newPath = string.IsNullOrEmpty(newParent) ? folderName : newParent + "/" + folderName;
+                Commands.Execute(new RenameFolderCmd<EntityDefinition>(
+                    "Entity", project.Entities,
+                    folderPath, newPath,
+                    onRename: (o, n) => { },
+                    onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                ));
+                RebuildAll();
+            };
+
+            return tree;
         }
 
         private FolderTreeView BuildEnumTree()
         {
-            return new FolderTreeView
+            var tree = new FolderTreeView
             {
                 GetFolders = () => project?.Enums.Folders ?? (IReadOnlyList<string>)Array.Empty<string>(),
-                GetItems = () => project?.Enums.Enums.Cast<object>() ?? Enumerable.Empty<object>(),
+                GetItems = () => project?.Enums.Items.Cast<object>() ?? Enumerable.Empty<object>(),
                 GetItemFolder = it => ((EnumDefinition)it).FolderPath,
                 GetItemId = it => ((EnumDefinition)it).Id,
                 GetItemSearchText = it => { var e = (EnumDefinition)it; return e.Name + " " + e.FolderPath; },
@@ -177,14 +391,50 @@ namespace NarrativeTool.UI.Entities
                     contextMenu?.Open(new EnumFolderContextTarget(this, parent), pos),
                 OnFolderRenameCommit = (oldPath, newPath) =>
                 {
-                    if (project.Enums.FolderExists(newPath))
+                    if (project.Enums.Folders.Contains(newPath))
                     { Debug.LogWarning($"[Enums] Folder '{newPath}' already exists."); RebuildAll(); return; }
-                    Commands.Execute(new RenameEnumFolderCmd(project, bus, oldPath, newPath));
+                    Commands.Execute(new RenameFolderCmd<EnumDefinition>(
+                        "Enum",
+                        project.Enums,
+                        oldPath, newPath,
+                        onRename: (o, n) => bus.Publish(new EnumFolderRenamedEvent(project.Id, o, n)),
+                        onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                    ));
                 },
             };
+
+            // ── Drag‑and‑drop ──
+            tree.AllowDragDrop = true;
+
+            tree.OnItemMoved = (item, newFolder) =>
+            {
+                var enumDef = (EnumDefinition)item;
+                if (enumDef.FolderPath == newFolder) return;
+                Commands.Execute(new MoveItemCmd<EnumDefinition>(
+                    "Enum", enumDef, project.Enums,
+                    enumDef.FolderPath, newFolder,
+                    doPublish: () => { }, undoPublish: () => { }
+                ));
+                RebuildAll();
+            };
+
+            tree.OnFolderMoved = (folderPath, newParent) =>
+            {
+                string folderName = folderPath.Split('/').Last();
+                string newPath = string.IsNullOrEmpty(newParent) ? folderName : newParent + "/" + folderName;
+                Commands.Execute(new RenameFolderCmd<EnumDefinition>(
+                    "Enum", project.Enums,
+                    folderPath, newPath,
+                    onRename: (o, n) => { },
+                    onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                ));
+                RebuildAll();
+            };
+
+            return tree;
         }
 
-        // ───────── Entity ops ─────────
+        // ───────── Entity commands ─────────
 
         public void AddEntity(string folderPath)
         {
@@ -193,7 +443,13 @@ namespace NarrativeTool.UI.Entities
             int n = 1;
             while (project.Entities.NameExistsInFolder(folderPath, name)) name = $"{baseName}{++n}";
             var e = new EntityDefinition("ent_" + Guid.NewGuid().ToString("N").Substring(0, 12), name, folderPath ?? "");
-            Commands.Execute(new AddEntityCmd(project, bus, e));
+            Commands.Execute(new AddItemCmd<EntityDefinition>(
+                "Entity",
+                project.Entities,
+                e,
+                doPublish: () => bus.Publish(new EntityAddedEvent(project.Id, e.Id)),
+                undoPublish: () => bus.Publish(new EntityRemovedEvent(project.Id, e.Id))
+            ));
             selectedEntityId = e.Id;
             focusNameForEntityId = e.Id;
             RebuildAll();
@@ -201,7 +457,22 @@ namespace NarrativeTool.UI.Entities
 
         public void RemoveEntity(string entityId)
         {
-            Commands.Execute(new RemoveEntityCmd(project, bus, entityId));
+            var entity = project.Entities.Items.FirstOrDefault(e => e.Id == entityId);
+            if (entity == null) return;
+
+            var msg = $"Delete entity \"{entity.Name}\"?";
+            Add(new ModalConfirm(msg, "Delete", () =>
+            {
+                Commands.Execute(new RemoveItemCmd<EntityDefinition>(
+                    "Entity",
+                    project.Entities,
+                    entityId,
+                    doPublish: () => bus.Publish(new EntityRemovedEvent(project.Id, entityId)),
+                    undoPublish: () => bus.Publish(new EntityAddedEvent(project.Id, entityId))
+                ));
+                if (selectedEntityId == entityId) selectedEntityId = null;
+                RebuildAll();
+            }));
         }
 
         public void BeginRenameEntity(string entityId)
@@ -211,15 +482,39 @@ namespace NarrativeTool.UI.Entities
             RebuildAll();
         }
 
+        private void CommitEntityRename(EntityDefinition e, string newName)
+        {
+            newName = (newName ?? "").Trim();
+            if (string.IsNullOrEmpty(newName) || newName == e.Name) return;
+            if (project.Entities.NameExistsInFolder(e.FolderPath, newName, excludeId: e.Id))
+            { Debug.LogWarning($"[Entities] Name '{newName}' already exists in folder '{e.FolderPath}'."); return; }
+            Commands.Execute(new RenameItemCmd<EntityDefinition>(
+                "Entity",
+                e,
+                e.Name,
+                newName,
+                doPublish: () => bus.Publish(new EntityRenamedEvent(project.Id, e.Id, e.Name, newName)),
+                undoPublish: () => bus.Publish(new EntityRenamedEvent(project.Id, e.Id, newName, e.Name))
+            ));
+        }
+
+        // ───────── Entity folder commands ─────────
+
         public void AddEntityFolder(string parent)
         {
             string parentPrefix = string.IsNullOrEmpty(parent) ? "" : parent + "/";
             string baseName = "newFolder";
             string name = baseName;
             int n = 1;
-            while (project.Entities.FolderExists(parentPrefix + name)) name = $"{baseName}{++n}";
+            while (project.Entities.Folders.Contains(parentPrefix + name)) name = $"{baseName}{++n}";
             string full = parentPrefix + name;
-            Commands.Execute(new AddEntityFolderCmd(project, bus, full));
+            Commands.Execute(new AddFolderCmd<EntityDefinition>(
+                "Entity",
+                project.Entities,
+                full,
+                doPublish: () => bus.Publish(new EntityFolderAddedEvent(project.Id, full)),
+                undoPublish: () => bus.Publish(new EntityFolderRemovedEvent(project.Id, full))
+            ));
             if (!string.IsNullOrEmpty(parent)) entityTree.SetFolderCollapsed(parent, false);
             entityTree.RenamingFolderPath = full;
             entityTree.Rebuild();
@@ -227,18 +522,22 @@ namespace NarrativeTool.UI.Entities
 
         public void RemoveEntityFolder(string folderPath)
         {
-            using var tx = Commands.BeginTransaction($"Remove entity folder \"{folderPath}\"");
-            string prefix = folderPath + "/";
-            var nestedFolders = project.Entities.Folders
-                .Where(f => f != null && f.StartsWith(prefix)).ToList();
-            var allFolders = new List<string>(nestedFolders) { folderPath };
-            var inSubtree = project.Entities.Entities
-                .Where(e => e.FolderPath == folderPath
-                         || (e.FolderPath != null && e.FolderPath.StartsWith(prefix)))
-                .Select(e => e.Id).ToList();
-            foreach (var id in inSubtree) Commands.Execute(new RemoveEntityCmd(project, bus, id));
-            foreach (var f in allFolders.OrderByDescending(s => s.Length))
-                Commands.Execute(new RemoveEntityFolderCmd(project, bus, f));
+            var msg = $"Delete folder \"{folderPath}\" and all its contents?";
+            Add(new ModalConfirm(msg, "Delete", () =>
+            {
+                Commands.Execute(new RemoveFolderCmd<EntityDefinition>(
+                    "Entity",
+                    project.Entities,
+                    folderPath,
+                    onItemRemoved: e => bus.Publish(new EntityRemovedEvent(project.Id, e.Id)),
+                    onFolderRemoved: f => bus.Publish(new EntityFolderRemovedEvent(project.Id, f)),
+                    onItemRestored: e => bus.Publish(new EntityAddedEvent(project.Id, e.Id)),
+                    onFolderRestored: f => bus.Publish(new EntityFolderAddedEvent(project.Id, f))
+                ));
+                if (selectedEntityId != null && project.Entities.Items.All(x => x.Id != selectedEntityId))
+                    selectedEntityId = null;
+                RebuildAll();
+            }));
         }
 
         public void BeginRenameEntityFolder(string folderPath)
@@ -249,7 +548,7 @@ namespace NarrativeTool.UI.Entities
             entityTree.Rebuild();
         }
 
-        // ───────── Enum ops ─────────
+        // ───────── Enum commands ─────────
 
         public void AddEnum(string folderPath)
         {
@@ -258,9 +557,14 @@ namespace NarrativeTool.UI.Entities
             int n = 1;
             while (project.Enums.NameExistsInFolder(folderPath, name)) name = $"{baseName}{++n}";
             var e = new EnumDefinition("enum_" + Guid.NewGuid().ToString("N").Substring(0, 12), name, folderPath ?? "");
-            // Seed with one default member so the enum is usable immediately.
             e.Members.Add(new EnumMember("m_" + Guid.NewGuid().ToString("N").Substring(0, 8), "Value1"));
-            Commands.Execute(new AddEnumCmd(project, bus, e));
+            Commands.Execute(new AddItemCmd<EnumDefinition>(
+                "Enum",
+                project.Enums,
+                e,
+                doPublish: () => bus.Publish(new EnumAddedEvent(project.Id, e.Id)),
+                undoPublish: () => bus.Publish(new EnumRemovedEvent(project.Id, e.Id))
+            ));
             selectedEnumId = e.Id;
             focusNameForEnumId = e.Id;
             RebuildAll();
@@ -268,7 +572,22 @@ namespace NarrativeTool.UI.Entities
 
         public void RemoveEnum(string enumId)
         {
-            Commands.Execute(new RemoveEnumCmd(project, bus, enumId));
+            var enumDef = project.Enums.Items.FirstOrDefault(e => e.Id == enumId);
+            if (enumDef == null) return;
+
+            var msg = $"Delete enum \"{enumDef.Name}\"?";
+            Add(new ModalConfirm(msg, "Delete", () =>
+            {
+                Commands.Execute(new RemoveItemCmd<EnumDefinition>(
+                    "Enum",
+                    project.Enums,
+                    enumId,
+                    doPublish: () => bus.Publish(new EnumRemovedEvent(project.Id, enumId)),
+                    undoPublish: () => bus.Publish(new EnumAddedEvent(project.Id, enumId))
+                ));
+                if (selectedEnumId == enumId) selectedEnumId = null;
+                RebuildAll();
+            }));
         }
 
         public void BeginRenameEnum(string enumId)
@@ -278,15 +597,39 @@ namespace NarrativeTool.UI.Entities
             RebuildAll();
         }
 
+        private void CommitEnumRename(EnumDefinition e, string newName)
+        {
+            newName = (newName ?? "").Trim();
+            if (string.IsNullOrEmpty(newName) || newName == e.Name) return;
+            if (project.Enums.NameExistsInFolder(e.FolderPath, newName, excludeId: e.Id))
+            { Debug.LogWarning($"[Enums] Name '{newName}' already exists in folder '{e.FolderPath}'."); return; }
+            Commands.Execute(new RenameItemCmd<EnumDefinition>(
+                "Enum",
+                e,
+                e.Name,
+                newName,
+                doPublish: () => bus.Publish(new EnumRenamedEvent(project.Id, e.Id, e.Name, newName)),
+                undoPublish: () => bus.Publish(new EnumRenamedEvent(project.Id, e.Id, newName, e.Name))
+            ));
+        }
+
+        // ───────── Enum folder commands ─────────
+
         public void AddEnumFolder(string parent)
         {
             string parentPrefix = string.IsNullOrEmpty(parent) ? "" : parent + "/";
             string baseName = "newFolder";
             string name = baseName;
             int n = 1;
-            while (project.Enums.FolderExists(parentPrefix + name)) name = $"{baseName}{++n}";
+            while (project.Enums.Folders.Contains(parentPrefix + name)) name = $"{baseName}{++n}";
             string full = parentPrefix + name;
-            Commands.Execute(new AddEnumFolderCmd(project, bus, full));
+            Commands.Execute(new AddFolderCmd<EnumDefinition>(
+                "Enum",
+                project.Enums,
+                full,
+                doPublish: () => bus.Publish(new EnumFolderAddedEvent(project.Id, full)),
+                undoPublish: () => bus.Publish(new EnumFolderRemovedEvent(project.Id, full))
+            ));
             if (!string.IsNullOrEmpty(parent)) enumTree.SetFolderCollapsed(parent, false);
             enumTree.RenamingFolderPath = full;
             enumTree.Rebuild();
@@ -294,18 +637,22 @@ namespace NarrativeTool.UI.Entities
 
         public void RemoveEnumFolder(string folderPath)
         {
-            using var tx = Commands.BeginTransaction($"Remove enum folder \"{folderPath}\"");
-            string prefix = folderPath + "/";
-            var nestedFolders = project.Enums.Folders
-                .Where(f => f != null && f.StartsWith(prefix)).ToList();
-            var allFolders = new List<string>(nestedFolders) { folderPath };
-            var inSubtree = project.Enums.Enums
-                .Where(e => e.FolderPath == folderPath
-                         || (e.FolderPath != null && e.FolderPath.StartsWith(prefix)))
-                .Select(e => e.Id).ToList();
-            foreach (var id in inSubtree) Commands.Execute(new RemoveEnumCmd(project, bus, id));
-            foreach (var f in allFolders.OrderByDescending(s => s.Length))
-                Commands.Execute(new RemoveEnumFolderCmd(project, bus, f));
+            var msg = $"Delete folder \"{folderPath}\" and all its contents?";
+            Add(new ModalConfirm(msg, "Delete", () =>
+            {
+                Commands.Execute(new RemoveFolderCmd<EnumDefinition>(
+                    "Enum",
+                    project.Enums,
+                    folderPath,
+                    onItemRemoved: e => bus.Publish(new EnumRemovedEvent(project.Id, e.Id)),
+                    onFolderRemoved: f => bus.Publish(new EnumFolderRemovedEvent(project.Id, f)),
+                    onItemRestored: e => bus.Publish(new EnumAddedEvent(project.Id, e.Id)),
+                    onFolderRestored: f => bus.Publish(new EnumFolderAddedEvent(project.Id, f))
+                ));
+                if (selectedEnumId != null && project.Enums.Items.All(x => x.Id != selectedEnumId))
+                    selectedEnumId = null;
+                RebuildAll();
+            }));
         }
 
         public void BeginRenameEnumFolder(string folderPath)
@@ -316,7 +663,7 @@ namespace NarrativeTool.UI.Entities
             enumTree.Rebuild();
         }
 
-        // ───────── Selection ─────────
+        // ───────── Selection helpers ─────────
 
         private void SelectEntity(string id, bool toggle)
         {
@@ -332,7 +679,7 @@ namespace NarrativeTool.UI.Entities
             RebuildAll();
         }
 
-        // ───────── Header builders ─────────
+        // ───────── Row builders ─────────
 
         private VisualElement BuildSectionHeader(string title, Action onAdd)
         {
@@ -387,7 +734,7 @@ namespace NarrativeTool.UI.Entities
             return row;
         }
 
-        // ───────── Entity inline editor ─────────
+        // ───────── Entity inline editor (unchanged from original) ─────────
 
         private VisualElement BuildEntityEditor(EntityDefinition e)
         {
@@ -414,17 +761,14 @@ namespace NarrativeTool.UI.Entities
                 nameField.schedule.Execute(() => { nameField.Focus(); nameField.SelectAll(); }).StartingIn(0);
             }
 
-            // Fields header
             var fieldsHdr = new Label("Fields");
             fieldsHdr.AddToClassList("nt-vars-editor-label");
             fieldsHdr.style.marginTop = 6;
             editor.Add(fieldsHdr);
 
-            // Each field row
             foreach (var f in e.Fields)
                 editor.Add(BuildFieldRow(e, f));
 
-            // Add field button
             var addFieldBtn = new Button(() => AddField(e)) { text = "+ Add field" };
             addFieldBtn.AddToClassList("nt-vars-input");
             editor.Add(addFieldBtn);
@@ -437,7 +781,6 @@ namespace NarrativeTool.UI.Entities
             var box = new VisualElement();
             box.AddToClassList("nt-vars-field-box");
 
-            // Top: name + remove
             var topRow = new VisualElement();
             topRow.AddToClassList("nt-vars-field-toprow");
             var fname = new TextField { value = f.Name };
@@ -449,12 +792,19 @@ namespace NarrativeTool.UI.Entities
                 { CommitFieldRename(e, f, fname.value); ev.StopPropagation(); }
             });
             topRow.Add(fname);
-            var rm = new Button(() => Commands.Execute(new RemoveEntityFieldCmd(project, bus, e.Id, f.Id))) { text = "✕" };
+            var rm = new Button(() =>
+            {
+                var msg = $"Delete field \"{f.Name}\"?";
+                Add(new ModalConfirm(msg, "Delete", () =>
+                {
+                    Commands.Execute(new RemoveEntityFieldCmd(project, bus, e.Id, f.Id));
+                }));
+            })
+            { text = "X" };
             rm.AddToClassList("nt-option-remove-btn");
             topRow.Add(rm);
             box.Add(topRow);
 
-            // Type
             var typeChoices = Enum.GetNames(typeof(VariableType)).ToList();
             var typeDD = new DropdownField(typeChoices, (int)f.Type);
             typeDD.AddToClassList("nt-vars-input");
@@ -467,18 +817,16 @@ namespace NarrativeTool.UI.Entities
             });
             box.Add(typeDD);
 
-            // Enum picker (when Type == Enum)
             if (f.Type == VariableType.Enum)
                 box.Add(BuildFieldEnumPicker(e, f));
 
-            // Default
             box.Add(BuildFieldDefaultInput(e, f));
             return box;
         }
 
         private VisualElement BuildFieldEnumPicker(EntityDefinition e, EntityField f)
         {
-            var enums = project.Enums.Enums;
+            var enums = project.Enums.Items.ToList();
             if (enums.Count == 0)
             {
                 var msg = new Label("(no enums defined)");
@@ -505,53 +853,53 @@ namespace NarrativeTool.UI.Entities
             switch (f.Type)
             {
                 case VariableType.Int:
-                {
-                    var fld = new IntegerField { value = f.DefaultValue is int i ? i : 0 };
-                    fld.AddToClassList("nt-vars-input");
-                    fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
-                    return fld;
-                }
-                case VariableType.Float:
-                {
-                    var fld = new FloatField { value = f.DefaultValue is float fv ? fv : 0f };
-                    fld.AddToClassList("nt-vars-input");
-                    fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
-                    return fld;
-                }
-                case VariableType.Bool:
-                {
-                    var fld = new Toggle { value = f.DefaultValue is bool b && b };
-                    fld.AddToClassList("nt-vars-input");
-                    fld.RegisterValueChangedCallback(evt => CommitFieldDefault(e, f, evt.newValue));
-                    return fld;
-                }
-                case VariableType.String:
-                {
-                    var fld = new TextField { value = f.DefaultValue as string ?? "" };
-                    fld.AddToClassList("nt-vars-input");
-                    fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
-                    return fld;
-                }
-                case VariableType.Enum:
-                {
-                    var en = project.Enums.Find(f.EnumTypeId);
-                    if (en == null || en.Members.Count == 0)
                     {
-                        var msg = new Label(en == null ? "(pick an enum first)" : "(enum has no members)");
-                        msg.AddToClassList("nt-vars-input"); return msg;
+                        var fld = new IntegerField { value = f.DefaultValue is int i ? i : 0 };
+                        fld.AddToClassList("nt-vars-input");
+                        fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
+                        return fld;
                     }
-                    var memberNames = en.Members.Select(m => m.Name).ToList();
-                    int idx = en.Members.FindIndex(m => m.Id == (f.DefaultValue as string));
-                    var dd = new DropdownField(memberNames, Mathf.Max(0, idx));
-                    dd.AddToClassList("nt-vars-input");
-                    dd.RegisterValueChangedCallback(evt =>
+                case VariableType.Float:
                     {
-                        int sel = memberNames.IndexOf(evt.newValue);
-                        if (sel < 0) return;
-                        CommitFieldDefault(e, f, en.Members[sel].Id);
-                    });
-                    return dd;
-                }
+                        var fld = new FloatField { value = f.DefaultValue is float fv ? fv : 0f };
+                        fld.AddToClassList("nt-vars-input");
+                        fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
+                        return fld;
+                    }
+                case VariableType.Bool:
+                    {
+                        var fld = new Toggle { value = f.DefaultValue is bool b && b };
+                        fld.AddToClassList("nt-vars-input");
+                        fld.RegisterValueChangedCallback(evt => CommitFieldDefault(e, f, evt.newValue));
+                        return fld;
+                    }
+                case VariableType.String:
+                    {
+                        var fld = new TextField { value = f.DefaultValue as string ?? "" };
+                        fld.AddToClassList("nt-vars-input");
+                        fld.RegisterCallback<BlurEvent>(_ => CommitFieldDefault(e, f, fld.value));
+                        return fld;
+                    }
+                case VariableType.Enum:
+                    {
+                        var en = project.Enums.Items.FirstOrDefault(en2 => en2.Id == f.EnumTypeId);
+                        if (en == null || en.Members.Count == 0)
+                        {
+                            var msg = new Label(en == null ? "(pick an enum first)" : "(enum has no members)");
+                            msg.AddToClassList("nt-vars-input"); return msg;
+                        }
+                        var memberNames = en.Members.Select(m => m.Name).ToList();
+                        int idx = en.Members.FindIndex(m => m.Id == (f.DefaultValue as string));
+                        var dd = new DropdownField(memberNames, Mathf.Max(0, idx));
+                        dd.AddToClassList("nt-vars-input");
+                        dd.RegisterValueChangedCallback(evt =>
+                        {
+                            int sel = memberNames.IndexOf(evt.newValue);
+                            if (sel < 0) return;
+                            CommitFieldDefault(e, f, en.Members[sel].Id);
+                        });
+                        return dd;
+                    }
                 default:
                     return new Label("(unsupported)");
             }
@@ -566,15 +914,6 @@ namespace NarrativeTool.UI.Entities
             var f = new EntityField("f_" + Guid.NewGuid().ToString("N").Substring(0, 12),
                                     name, VariableType.Int, VariableStore.DefaultFor(VariableType.Int));
             Commands.Execute(new AddEntityFieldCmd(project, bus, e.Id, f));
-        }
-
-        private void CommitEntityRename(EntityDefinition e, string newName)
-        {
-            newName = (newName ?? "").Trim();
-            if (string.IsNullOrEmpty(newName) || newName == e.Name) return;
-            if (project.Entities.NameExistsInFolder(e.FolderPath, newName, excludeId: e.Id))
-            { Debug.LogWarning($"[Entities] Name '{newName}' already exists in folder '{e.FolderPath}'."); return; }
-            Commands.Execute(new RenameEntityCmd(project, bus, e.Id, e.Name, newName));
         }
 
         private void CommitFieldRename(EntityDefinition e, EntityField f, string newName)
@@ -592,7 +931,7 @@ namespace NarrativeTool.UI.Entities
             Commands.Execute(new SetEntityFieldDefaultCmd(project, bus, e.Id, f.Id, f.DefaultValue, value));
         }
 
-        // ───────── Enum inline editor ─────────
+        // ───────── Enum inline editor (unchanged) ─────────
 
         private VisualElement BuildEnumEditor(EnumDefinition e)
         {
@@ -647,7 +986,15 @@ namespace NarrativeTool.UI.Entities
                 { CommitMemberRename(e, m, nameField.value); ev.StopPropagation(); }
             });
             row.Add(nameField);
-            var rm = new Button(() => Commands.Execute(new RemoveEnumMemberCmd(project, bus, e.Id, m.Id))) { text = "✕" };
+            var rm = new Button(() =>
+            {
+                var msg = $"Delete member \"{m.Name}\"?";
+                Add(new ModalConfirm(msg, "Delete", () =>
+                {
+                    Commands.Execute(new RemoveEnumMemberCmd(project, bus, e.Id, m.Id));
+                }));
+            })
+            { text = "X" };
             rm.AddToClassList("nt-option-remove-btn");
             row.Add(rm);
             return row;
@@ -661,15 +1008,6 @@ namespace NarrativeTool.UI.Entities
             while (project.Enums.MemberNameExists(e, name)) name = $"{baseName}{e.Members.Count + 1 + n++}";
             var m = new EnumMember("m_" + Guid.NewGuid().ToString("N").Substring(0, 8), name);
             Commands.Execute(new AddEnumMemberCmd(project, bus, e.Id, m));
-        }
-
-        private void CommitEnumRename(EnumDefinition e, string newName)
-        {
-            newName = (newName ?? "").Trim();
-            if (string.IsNullOrEmpty(newName) || newName == e.Name) return;
-            if (project.Enums.NameExistsInFolder(e.FolderPath, newName, excludeId: e.Id))
-            { Debug.LogWarning($"[Enums] Name '{newName}' already exists in folder '{e.FolderPath}'."); return; }
-            Commands.Execute(new RenameEnumCmd(project, bus, e.Id, e.Name, newName));
         }
 
         private void CommitMemberRename(EnumDefinition e, EnumMember m, string newName)
@@ -704,7 +1042,7 @@ namespace NarrativeTool.UI.Entities
         }
     }
 
-    // ───────── Context-menu targets ─────────
+    // ───────── Context menu targets ─────────
 
     public sealed class EntityContextTarget
     {

@@ -7,6 +7,8 @@ namespace NarrativeTool.Data.Graph.Nodes
     {
         public const string InputPortId = "in";
 
+        public EndNodeData() : base() { }
+
         public EndNodeData(string id, Vector2 position)
             : base(id, "End", NodeCategory.Flow, position)
         {
@@ -20,5 +22,7 @@ namespace NarrativeTool.Data.Graph.Nodes
             Inputs.Add(new PortData(InputPortId, "", PortDirection.Input,
                                    PortCapacity.Multi, "flow"));
         }
+
+
     }
 }

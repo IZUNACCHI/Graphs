@@ -4,7 +4,7 @@ namespace NarrativeTool.Data.Graph
 {
     public sealed class GraphData
     {
-        public string Id { get; }
+        public string Id { get; private set; }
         public string Name { get; set; }
 
         public List<NodeData> Nodes { get; } = new();
@@ -14,6 +14,8 @@ namespace NarrativeTool.Data.Graph
         {
             Id = id; Name = name;
         }
+
+        public GraphData() { }
 
         public NodeData FindNode(string id)
         {

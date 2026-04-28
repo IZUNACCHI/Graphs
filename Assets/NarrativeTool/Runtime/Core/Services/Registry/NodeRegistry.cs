@@ -1,15 +1,13 @@
-// NarrativeTool.Core/NodeRegistry.cs
+// NarrativeTool.Core/Services/Registry/NodeRegistry.cs
 using NarrativeTool.Canvas;
 using NarrativeTool.Canvas.Views;
 using NarrativeTool.Core;
 using NarrativeTool.Data.Graph;
-using NarrativeTool.Data.Graph.Nodes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 /// <summary>
 /// Central registry for node types, allowing dynamic registration and lookup of node descriptors.
@@ -19,7 +17,7 @@ public sealed class NodeRegistry
 {
     // Keyed by TypeId for fast lookup
     private readonly Dictionary<string, NodeTypeDescriptor> descriptors = new();
-    
+
 
     public void Register(NodeTypeDescriptor desc)
     {
@@ -39,10 +37,22 @@ public sealed class NodeRegistry
 
     public IReadOnlyList<NodeTypeDescriptor> GetAll() => descriptors.Values.ToList();
 
-    public NodeData CreateData(string typeId, Vector2 position)
+    /// <summary>
+    /// Creates a new <see cref="NodeData"/> instance for the given type.
+    /// </summary>
+    /// <param name="typeId">The node type identifier.</param>
+    /// <param name="position">Canvas position where the node will be placed.</param>
+    /// <param name="title">Optional title. If null, the descriptor's DisplayName is used.</param>
+    /// <returns>A new NodeData instance, or null if the type is unknown.</returns>
+    public NodeData CreateData(string typeId, Vector2 position, string title = null)
     {
         var desc = TryGet(typeId);
-        return desc?.DataFactory?.Invoke(typeId + "_" + Guid.NewGuid().ToString("N").Substring(0, 8), position);
+        if (desc == null) return null;
+        // Use the provided title, or fall back to the display name from the descriptor
+        return desc.DataFactory?.Invoke(
+            typeId + "_" + Guid.NewGuid().ToString("N").Substring(0, 8),
+            position,
+            title ?? desc.DisplayName);
     }
 
     public NodeView CreateView(NodeData node, GraphView canvas)
@@ -97,16 +107,17 @@ public sealed class NodeRegistry
                     Color = attr.Color,
                     Description = attr.Description,
                     DocEntryId = attr.DocEntryId,
-                    DataFactory = (id, pos) =>
+                    // The factory now takes a third string parameter: the desired title.
+                    DataFactory = (id, pos, title) =>
                     {
-                        var node = (NodeData)Activator.CreateInstance(type, id, attr.DisplayName, pos);
+                        var node = (NodeData)Activator.CreateInstance(type, id, title, pos);
                         node.TypeId = attr.NodeTypeId;
                         return node;
                     },
                     ViewFactory = (node, canvas) => (NodeView)Activator.CreateInstance(viewType, node, canvas),
                     DrawerFactory = null   // to be extended with [InspectorDrawerOf] later
                 };
-                var tempNode = desc.DataFactory("__temp__", Vector2.zero);
+                var tempNode = desc.DataFactory("__temp__", Vector2.zero, attr.DisplayName);
                 foreach (var p in tempNode.Inputs)
                     desc.Ports.Add(new PortDefinition
                     {

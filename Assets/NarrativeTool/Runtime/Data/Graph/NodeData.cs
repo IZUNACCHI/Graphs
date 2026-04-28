@@ -10,7 +10,7 @@ namespace NarrativeTool.Data.Graph
     /// </summary>
     public abstract class NodeData
     {
-        public string Id { get; }
+        public string Id { get; set; }
         public string Title { get; set; }
 
         public string TypeId { get; set; }
@@ -31,6 +31,14 @@ namespace NarrativeTool.Data.Graph
             var attr = GetType().GetCustomAttribute<NodeTypeAttribute>();
             if (attr != null)
                 TypeId = attr.NodeTypeId;
+        }
+
+        protected NodeData()
+        {
+            Id = System.Guid.NewGuid().ToString("N").Substring(0, 8); // fallback
+            Title = "";
+            Category = NodeCategory.Flow;
+            Position = Vector2.zero;
         }
 
         public PortData FindPort(string portId)

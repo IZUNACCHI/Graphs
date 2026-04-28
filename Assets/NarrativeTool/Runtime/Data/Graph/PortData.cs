@@ -9,11 +9,11 @@ namespace NarrativeTool.Data.Graph
     /// </summary>
     public sealed class PortData
     {
-        public string Id { get; }
+        public string Id { get; set; }
         public string Label { get; set; }
-        public PortDirection Direction { get; }
-        public PortCapacity Capacity { get; }
-        public string TypeTag { get; }
+        public PortDirection Direction { get; set; }
+        public PortCapacity Capacity { get; set; }
+        public string TypeTag { get; set; }
 
         public PortData(string id, string label, PortDirection direction,
                     PortCapacity capacity, string typeTag)
@@ -21,5 +21,7 @@ namespace NarrativeTool.Data.Graph
             Id = id; Label = label; Direction = direction;
             Capacity = capacity; TypeTag = typeTag;
         }
+
+        public PortData() { }
     }
 }

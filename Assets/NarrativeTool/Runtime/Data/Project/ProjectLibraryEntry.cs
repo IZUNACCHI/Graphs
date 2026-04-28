@@ -1,3 +1,5 @@
+using System;
+
 namespace NarrativeTool.Data.Project
 {
     /// <summary>
@@ -15,10 +17,13 @@ namespace NarrativeTool.Data.Project
     {
         public string Name { get; set; }
         public string Path { get; set; }
-        public string OpenedDisplay { get; set; }   // "2 hours ago" etc; pre-rendered for now
+        public DateTime LastOpened { get; set; }
+
+
         public bool Pinned { get; set; }
         public int NodeCount { get; set; }
-        public int EdgeCount { get; set; }
+        public int GraphCount { get; set; }
+
         // Hue key drives the thumbnail accent colour. Matches the keys used
         // in the mockup ("te"/"pu"/"bl"/"am"/"gr"/"rd").
         public string ThumbHueKey { get; set; } = "gr";

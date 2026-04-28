@@ -18,7 +18,7 @@ public sealed class NodeTypeDescriptor
 
     public List<PortDefinition> Ports { get; set; } = new();
 
-    public Func<string, Vector2, NodeData> DataFactory { get; set; }
+    public Func<string, Vector2, string, NodeData> DataFactory { get; set; }
     public Func<NodeData, GraphView, NodeView> ViewFactory { get; set; }
     public Func<IInspectorDrawer> DrawerFactory { get; set; }
 }

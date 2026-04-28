@@ -1,8 +1,12 @@
-﻿.nt-root   { background-color: #1a1a1a; }
+﻿/* ============================================================
+   ROOT / CANVAS
+   ============================================================ */
+.nt-root   { background-color: #1a1a1a; }
 .nt-canvas { background-color: #1a1a1a; }
 
-/* ---------- Node ---------- */
-/* Base node style, shared across all node types */
+/* ============================================================
+   NODE
+   ============================================================ */
 .nt-node {
     background-color: #2d2d2d;
     border-left-width: 1px; border-right-width: 1px;
@@ -15,16 +19,12 @@
     min-width: 240px;   
     max-width: 340px;   
 }
-
-/* Highlighted state when node is selected */
 .nt-node--selected {
     border-left-color: #ffffff;  border-right-color: #ffffff;
     border-top-color: #ffffff;   border-bottom-color: #ffffff;
     border-left-width: 2px;  border-right-width: 2px;
     border-top-width: 2px;   border-bottom-width: 2px;
 }
-
-/* Node header, containing the title and optionally other controls, code overrides the color */
 .nt-node-header {
     height: 24px;
     padding-left: 10px; padding-right: 10px;
@@ -32,66 +32,53 @@
     border-top-left-radius: 5px; border-top-right-radius: 5px;
     margin-bottom: 4px;
 }
-
-/* Node title text, contained within the header. Color is overridden by code based on node type, but other styles are shared. */
 .nt-node-title {
     color: #eaeaea;
     font-size: 12px;
     -unity-font-style: bold;
     -unity-text-align: middle-left;
 }
-
-
-
 .nt-header-event { background-color: #8b2020; }
 .nt-header-flow  { background-color: #3a3a3a; }
 .nt-header-data  { background-color: #2d6aa0; }
-
 .nt-node-body {
     flex-direction: row; justify-content: space-between;
     padding-left: 2px; padding-right: 2px;
 }
-
 .nt-node-column  { flex-direction: column; min-width: 48px; }
 .nt-node-inputs  { align-items: flex-start; }
 .nt-node-outputs { align-items: flex-end;   }
-
 .nt-node-extras {
     padding-left: 8px; padding-right: 8px;
     padding-top: 4px;  padding-bottom: 2px;
 }
 
-/* ---------- Port ---------- */
+/* ============================================================
+   PORT
+   ============================================================ */
 .nt-port {
     flex-direction: row; align-items: center;
     padding-top: 2px; padding-bottom: 2px;
     padding-left: 2px; padding-right: 2px;
     height: 18px;
 }
-
 .nt-port-input  { margin-left:  -7px; }
 .nt-port-output { margin-right: -7px; }
-
 .nt-port-label {
     color: #b8b8b8;
     font-size: 11px;
     margin-left: 5px; margin-right: 5px;
     -unity-text-align: middle-left;
 }
-
 .nt-port-input  > .nt-port-label { -unity-text-align: middle-left;  }
 .nt-port-output > .nt-port-label { -unity-text-align: middle-right; }
-
 .nt-port-glyph {
     width: 11px; height: 11px;
     background-color: #cfcfcf;
     border-top-left-radius: 2px;    border-top-right-radius: 2px;
     border-bottom-left-radius: 2px; border-bottom-right-radius: 2px;
 }
-
 .nt-port-flow { background-color: #d8d8d8; }
-
-/* Port glyph highlighted as a valid drop target during edge creation */
 .nt-port-glyph--compatible {
     background-color: #7dd87d;
     width: 14px; height: 14px;
@@ -99,8 +86,9 @@
     border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
 }
 
-/* ---------- Property Field ---------- */
-
+/* ============================================================
+   PROPERTY FIELD
+   ============================================================ */
 .nt-prop-container {
     margin: 0px 10px;
     flex-direction: column;
@@ -109,17 +97,12 @@
     border-bottom-width: 1px;
     border-bottom-color: #333333;
 }
-
-/* Remove separator from last child */
 .nt-prop-container--last {
     border-bottom-width: 0;
 }
-
 .nt-prop-field {
     flex-grow: 1;
 }
-
-/* Label — shared across all field types */
 .nt-prop-field .unity-base-field__label,
 .nt-prop-field .unity-toggle__label {
     font-size: 10px;
@@ -131,8 +114,6 @@
     -unity-text-align: middle-left;
     overflow: hidden;
 }
-
-/* Text inputs only — NOT toggle */
 .nt-prop-field .unity-base-text-field__input,
 .nt-prop-field .unity-integer-field .unity-base-field__input,
 .nt-prop-field .unity-float-field .unity-base-field__input,
@@ -150,19 +131,14 @@
     font-size: 11px;
     color: #c8c8c8;
 }
-
 .nt-prop-field .unity-base-text-field__input:focus {
     border-left-color: #4a9a6a; border-right-color: #4a9a6a;
     border-top-color: #4a9a6a;  border-bottom-color: #4a9a6a;
 }
-
-/* Multiline */
 .nt-prop-field--multiline .unity-base-text-field__input {
     min-height: 60px;
     white-space: pre-wrap;
 }
-
-/* Toggle — only style the checkmark box itself, not the whole input area */
 .nt-prop-field .unity-toggle__checkmark {
     background-color: #1c1c1c;
     border-left-width: 1px; border-right-width: 1px;
@@ -174,17 +150,15 @@
     width: 16px;
     height: 16px;
 }
-
-/* Placeholder text in field input */
 .unity-base-text-field__input--placeholder {
     color: #555555;
     -unity-font-style: italic;
     font-size: 11px;
 }
 
-/* ---------- Choice Node ---------- */
-
-/* Preamble toggle button — acts as a collapsible section divider */
+/* ============================================================
+   CHOICE NODE
+   ============================================================ */
 .nt-preamble-toggle {
     flex-direction: row;
     align-items: center;
@@ -193,13 +167,11 @@
     margin-top: 4px;
     margin-bottom: 2px;
 }
-
 .nt-preamble-toggle-line {
     flex-grow: 1;
     height: 1px;
     background-color: #333333;
 }
-
 .nt-preamble-toggle-btn {
     background-color: #252525;
     border-left-width: 1px; border-right-width: 1px;
@@ -214,22 +186,18 @@
     padding-top: 1px;  padding-bottom: 1px;
     margin-left: 6px;  margin-right: 6px;
 }
-
 .nt-preamble-toggle-btn--active {
     background-color: #2d4a3a;
     border-left-color: #4a9a6a; border-right-color: #4a9a6a;
     border-top-color: #4a9a6a;  border-bottom-color: #4a9a6a;
     color: #7dcfa0;
 }
-
-/* Preamble content area — the fields shown when expanded */
 .nt-preamble-body {
     padding-left: 8px; padding-right: 8px;
     padding-top: 2px;  padding-bottom: 4px;
 }
 
-/* ---------- Option List ---------- */
-
+/* Option list */
 .nt-option-list {
     margin-left: 8px;  margin-right: 8px;
     margin-top: 4px;
@@ -237,8 +205,6 @@
     border-top-color: #333333;
     padding-top: 4px;
 }
-
-/* Add Option button at the bottom */
 .nt-option-add-btn {
     margin-left: 8px;  margin-right: 8px;
     margin-top: 3px;   margin-bottom: 8px;
@@ -254,8 +220,7 @@
     padding-top: 3px;  padding-bottom: 3px;
 }
 
-/* ---------- Option Row ---------- */
-
+/* Option rows */
 .nt-option {
     background-color: #252525;
     border-left-width: 1px; border-right-width: 1px;
@@ -267,21 +232,16 @@
     margin-bottom: 3px;
     overflow: visible;
 }
-
-/* Top row: sort buttons + text input + condition toggle + remove */
 .nt-option-row {
     flex-direction: row;
     align-items: center;
     padding-left: 4px; padding-right: 4px;
     padding-top: 3px;  padding-bottom: 3px;
 }
-
-/* Sort arrow buttons column */
 .nt-option-sort {
     flex-direction: column;
     margin-right: 3px;
 }
-
 .nt-option-sort-btn {
     background-color: #1c1c1c;
     border-left-width: 1px; border-right-width: 1px;
@@ -296,13 +256,10 @@
     margin-bottom: 1px;
     -unity-text-align: middle-center;
 }
-
-/* Option text input */
 .nt-option-text {
     flex-grow: 1;
     margin-right: 3px;
 }
-
 .nt-option-text .unity-base-text-field__input {
     background-color: #1c1c1c;
     border-left-width: 1px; border-right-width: 1px;
@@ -316,13 +273,10 @@
     font-size: 11px;
     color: #c8c8c8;
 }
-
 .nt-option-text .unity-base-text-field__input:focus {
     border-left-color: #4a9a6a; border-right-color: #4a9a6a;
     border-top-color: #4a9a6a;  border-bottom-color: #4a9a6a;
 }
-
-/* Condition toggle button */
 .nt-option-condition-btn {
     background-color: #1c1c1c;
     border-left-width: 1px; border-right-width: 1px;
@@ -337,15 +291,12 @@
     padding-top: 1px;  padding-bottom: 1px;
     margin-right: 3px;
 }
-
 .nt-option-condition-btn--active {
     background-color: #2d4a3a;
     border-left-color: #4a9a6a; border-right-color: #4a9a6a;
     border-top-color: #4a9a6a;  border-bottom-color: #4a9a6a;
     color: #7dcfa0;
 }
-
-/* Remove button */
 .nt-option-remove-btn {
     background-color: #1c1c1c;
     border-left-width: 1px; border-right-width: 1px;
@@ -360,9 +311,7 @@
     padding-top: 1px;  padding-bottom: 1px;
 }
 
-/* ---------- Option Condition Body ---------- */
-
-/* Shown below the option row when condition toggle is active */
+/* Option condition body */
 .nt-option-condition-body {
     border-top-width: 1px;
     border-top-color: #333333;
@@ -370,14 +319,11 @@
     padding-top: 4px; padding-bottom: 3px;
     padding-left: 2px; padding-right: 2px;
 }
-
-/* Condition multiline input */
 .nt-option-condition-field {
     flex-direction: row;
     align-items: flex-start;
     margin-bottom: 3px;
 }
-
 .nt-option-condition-field-label {
     color: #666666;
     font-size: 10px;
@@ -386,7 +332,6 @@
     padding-top: 3px;
     -unity-text-align: middle-left;
 }
-
 .nt-option-condition-field .unity-base-text-field__input {
     flex-grow: 1;
     background-color: #191919;
@@ -403,20 +348,16 @@
     min-height: 28px;
     white-space: pre-wrap;
 }
-
-/* Show-if-false toggle row */
 .nt-option-condition-toggle {
     flex-direction: row;
     align-items: center;
 }
-
 .nt-option-condition-toggle .unity-toggle__label {
     color: #666666;
     font-size: 10px;
     min-width: 0;
     margin-right: 6px;
 }
-
 .nt-option-condition-toggle .unity-toggle__checkmark {
     background-color: #1c1c1c;
     border-left-width: 1px; border-right-width: 1px;
@@ -428,10 +369,7 @@
     width: 13px; height: 13px;
 }
 
-/* ---------- Option Port ---------- */
-
-/* Overrides the standard output port margin to account for the extra
-   nesting depth: 8px option-list margin + 1px option border + 7px standard offset */
+/* Option port */
 .nt-option-port {
     margin-right: -16px;
     align-items: center;
@@ -439,7 +377,6 @@
     padding-top: 2px;
     padding-bottom: 2px;
 }
-
 .nt-option > .nt-port {
     position: absolute;
     right: -16px;
@@ -449,12 +386,13 @@
     height: 11px;
     border-radius: 2px;
 }
-
 .nt-option > .nt-port > .nt-port-label {
     display: none;
 }
 
-/* ---------- Context menu ---------- */
+/* ============================================================
+   CONTEXT MENU
+   ============================================================ */
 .nt-ctxmenu {
     background-color: #252525;
     border-left-width: 1px; border-right-width: 1px;
@@ -467,7 +405,6 @@
     padding-left: 2px;   padding-right: 2px;
     min-width: 160px;
 }
-
 .nt-ctxmenu-item {
     color: #dcdcdc;
     font-size: 12px;
@@ -475,21 +412,17 @@
     padding-left: 10px;  padding-right: 10px;
     -unity-text-align: middle-left;
 }
-
 .nt-ctxmenu-item:hover {
     background-color: #2d6aa0; color: #ffffff;
 }
-
 .nt-ctxmenu-item--disabled { color: #606060; }
 .nt-ctxmenu-item--disabled:hover { background-color: transparent; color: #606060; }
-
 .nt-ctxmenu-separator {
     height: 1px;
     background-color: #3a3a3a;
     margin-top: 3px; margin-bottom: 3px;
     margin-left: 4px; margin-right: 4px;
 }
-
 .nt-ctxmenu-header {
     font-size: 9px;
     color: #888888;
@@ -497,12 +430,13 @@
     padding-bottom: 2px;
     padding-left: 10px;
     padding-right: 10px;
-    -unity-font-style: bold;  /* compensates for losing uppercase */
+    -unity-font-style: bold;
 }
 
-/* ---------- Edge ---------- */
-.nt-edge { /* visual contents drawn via Painter2D */ }
-
+/* ============================================================
+   EDGE
+   ============================================================ */
+.nt-edge { }
 .nt-edge-label {
     color: #dcdcdc;
     font-size: 11px;
@@ -513,11 +447,9 @@
     border-top-left-radius: 2px;    border-top-right-radius: 2px;
     border-bottom-left-radius: 2px; border-bottom-right-radius: 2px;
 }
-
 .nt-edge-label-editor {
     background-color: rgba(26, 26, 26, 0.95);
 }
-
 .nt-edge-label-editor > .unity-text-field__input {
     background-color: #1d1d1d;
     border-left-width: 1px; border-right-width: 1px;
@@ -532,8 +464,9 @@
     font-size: 11px;
 }
 
-/* ---------- Buttons ---------- */
-
+/* ============================================================
+   BUTTONS
+   ============================================================ */
 .nt-btn {
     border-top-left-radius: 3px;    border-top-right-radius: 3px;
     border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
@@ -544,30 +477,24 @@
     font-size: 11px;
     -unity-text-align: middle-center;
 }
-
-/* Normal button */
 .nt-btn--normal {
     background-color: #1c1c1c;
     border-left-color: #3a3a3a; border-right-color: #3a3a3a;
     border-top-color: #3a3a3a;  border-bottom-color: #3a3a3a;
     color: #888888;
 }
-
 .nt-btn--normal:hover {
     background-color: #252525;
     border-left-color: #4a4a4a; border-right-color: #4a4a4a;
     border-top-color: #4a4a4a;  border-bottom-color: #4a4a4a;
     color: #aaaaaa;
 }
-
-/* Danger button */
 .nt-btn--danger {
     background-color: #5a2020;
     border-left-color: #7a3030; border-right-color: #7a3030;
     border-top-color: #7a3030;  border-bottom-color: #7a3030;
     color: #e08080;
 }
-
 .nt-btn--danger:hover {
     background-color: #6e2424;
     border-left-color: #9a3a3a; border-right-color: #9a3a3a;
@@ -575,8 +502,7 @@
     color: #f09090;
 }
 
-/* ---------- Option Delete Confirm ---------- */
-
+/* Option delete confirm */
 .nt-option--confirm {
     background-color: #2a1a1a;
     border-left-color: #5a2a2a; border-right-color: #5a2a2a;
@@ -587,14 +513,12 @@
     border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
     margin-bottom: 3px;
 }
-
 .nt-option-confirm-row {
     flex-direction: row;
     align-items: center;
     padding-left: 8px; padding-right: 8px;
     padding-top: 4px;  padding-bottom: 4px;
 }
-
 .nt-option-confirm-label {
     flex-grow: 1;
     color: #c07070;
@@ -603,7 +527,9 @@
     overflow: hidden;
 }
 
-/* ---------- Compatibility tooltip ---------- */
+/* ============================================================
+   COMPATIBILITY TOOLTIP
+   ============================================================ */
 .nt-edge-compat-tooltip {
     color: #e8c8c8;
     background-color: rgba(120, 30, 30, 0.92);
@@ -615,14 +541,74 @@
     position: absolute;
 }
 
-/* ---------- Variables panel ---------- */
-.nt-vars {
-    width: 200px;
+/* ============================================================
+   SIDEBAR (new layout)
+   ============================================================ */
+.nt-sidebar {
+    width: 220px;
     background-color: #202020;
     border-right-width: 1px;
     border-right-color: #333;
     flex-shrink: 0;
     flex-direction: column;
+    overflow: hidden;
+}
+
+/* Top half: Graphs panel */
+.nt-graphs {
+    flex-grow: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Bottom half container */
+.nt-sidebar-bottom {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Tab bar */
+.nt-sidebar-tabbar {
+    flex-direction: row;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+    flex-shrink: 0;
+}
+.nt-sidebar-tab {
+    flex-grow: 1;
+    color: #555;
+    font-size: 10px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    -unity-text-align: middle-center;
+}
+.nt-sidebar-tab--active {
+    color: #7dcfa0;
+    background-color: #1e2e24;
+    border-bottom-width: 2px;
+    border-bottom-color: #4a9a6a;
+}
+
+/* Panels inside the bottom area */
+.nt-sidebar-panel {
+    background-color: #1c1c1c;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* ============================================================
+   VARIABLES / ENTITIES / ENUMS PANELS (shared look)
+   ============================================================ */
+.nt-vars {
+    background-color: #202020;
+    border-right-width: 1px;
+    border-right-color: #333;
+    flex-shrink: 0;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden;
 }
 .nt-vars-tabs {
     flex-direction: row;
@@ -670,11 +656,12 @@
     margin-left: 0; margin-right: 0;
 }
 
-/* ---------- Generic folder tree ---------- */
+/* ============================================================
+   FOLDER TREE
+   ============================================================ */
 .nt-tree { flex-grow: 1; flex-direction: column; }
 .nt-tree-scroll { flex-grow: 1; }
 .nt-tree-list { padding-top: 2px; padding-bottom: 2px; flex-grow: 1; }
-
 .nt-tree-folder {
     flex-direction: row;
     align-items: center;
@@ -697,7 +684,6 @@
     margin-left: 3px;
     font-size: 10px;
 }
-
 .nt-tree-item {
     flex-direction: column;
     margin-left: 3px; margin-right: 3px;
@@ -719,14 +705,32 @@
     padding-top: 4px; padding-bottom: 6px;
     padding-left: 8px; padding-right: 8px;
 }
+.nt-tree-search {
+    margin: 3px 5px;
+    background-color: #1a1a1a;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: #2a2a2a;
+    border-right-color: #2a2a2a;
+    border-top-color: #2a2a2a;
+    border-bottom-color: #2a2a2a;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px;
+    border-bottom-right-radius: 3px;
+    color: #888;
+    font-size: 10px;
+    padding: 2px 5px;
+}
 
-/* ---------- Variable row content (sits inside .nt-tree-item-header) ---------- */
+/* Variable row inside tree */
 .nt-vars-row {
     flex-direction: row;
     align-items: center;
     flex-grow: 1;
 }
-
 .nt-vars-swatch {
     width: 6px; height: 6px;
     margin-right: 5px;
@@ -739,7 +743,7 @@
 .nt-vars-swatch--enum   { background-color: #c0a040; }
 .nt-vars-swatch--entity { background-color: #4a9a6a; }
 
-/* Section headers used by the Entities panel (Entities / Enums) */
+/* Section headers for entities panel */
 .nt-vars-section {
     flex-direction: row;
     align-items: center;
@@ -757,7 +761,7 @@
     -unity-font-style: bold;
 }
 
-/* Inline field/member rows inside an entity or enum's editor */
+/* Field / member rows inside entity/ enum editor */
 .nt-vars-field-box {
     background-color: #161616;
     border-color: #2a2a2a;
@@ -775,14 +779,43 @@
 }
 .nt-vars-field-toprow > .nt-vars-input { flex-grow: 1; }
 
-/* ========== Project Library start screen ========== */
+/* Inline editor labels and input */
+.nt-vars-name {
+    color: #b8b8b8;
+    font-size: 10px;
+    flex-grow: 1;
+}
+.nt-vars-type-badge {
+    font-size: 9px;
+    color: #666;
+    background-color: #1c1c1c;
+    border-color: #2a2a2a;
+    border-left-width: 1px; border-right-width: 1px;
+    border-top-width: 1px;  border-bottom-width: 1px;
+    border-top-left-radius: 2px;    border-top-right-radius: 2px;
+    border-bottom-left-radius: 2px; border-bottom-right-radius: 2px;
+    padding-left: 3px; padding-right: 3px;
+}
+.nt-vars-editor { flex-direction: column; }
+.nt-vars-editor-row {
+    flex-direction: column;
+    margin-bottom: 3px;
+}
+.nt-vars-editor-label {
+    color: #555;
+    font-size: 9px;
+    margin-bottom: 2px;
+}
+.nt-vars-input { font-size: 10px; }
+
+/* ============================================================
+   PROJECT LIBRARY
+   ============================================================ */
 .nt-library {
     background-color: #0e0e0e;
     flex-direction: column;
     flex-grow: 1;
 }
-
-/* Top bar */
 .nt-library-topbar {
     background-color: #0a0a0a;
     border-bottom-width: 1px;
@@ -814,8 +847,6 @@
     border-color: #272727;
     color: #c8c8c8;
 }
-
-/* Buttons */
 .nt-library-btn {
     background-color: rgba(0, 0, 0, 0);
     border-color: #2a2a2a;
@@ -843,8 +874,6 @@
     border-color: #3a6a3a;
     color: #6ab08a;
 }
-
-/* Body */
 .nt-library-body {
     flex-grow: 1;
     padding-left: 22px; padding-right: 22px;
@@ -864,15 +893,10 @@
     border-top-left-radius: 3px; border-top-right-radius: 3px;
     border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
 }
-
-/* Card grid: UIToolkit has no CSS-grid; flex-wrap of fixed-width cards
-   gives roughly the same look. */
 .nt-library-grid {
     flex-direction: row;
     flex-wrap: wrap;
 }
-
-/* Card */
 .nt-library-card {
     width: 220px;
     background-color: #141414;
@@ -886,7 +910,6 @@
 }
 .nt-library-card:hover { border-color: #2a2a2a; }
 .nt-library-card--pinned { border-color: #1e2e1e; }
-
 .nt-library-card-thumb {
     height: 90px;
     background-color: #111;
@@ -941,8 +964,6 @@
 }
 .nt-library-pin-btn--on { color: #4a9a6a; }
 .nt-library-pin-btn:hover { color: #6ab08a; }
-
-/* Dashed "+ NEW PROJECT" tile */
 .nt-library-newcard {
     width: 220px;
     height: 155px;
@@ -971,7 +992,9 @@
     margin-top: 5px;
 }
 
-/* ========== New Project wizard ========== */
+/* ============================================================
+   NEW PROJECT WIZARD
+   ============================================================ */
 .nt-wiz-overlay {
     background-color: rgba(0, 0, 0, 0.7);
     align-items: center;
@@ -1034,7 +1057,6 @@
     width: 18px;
 }
 .nt-wiz-close:hover { color: #888; }
-
 .nt-wiz-body {
     flex-grow: 1;
     padding-left: 20px; padding-right: 20px;
@@ -1049,7 +1071,6 @@
     border-top-width: 1px;
     border-top-color: #1a1a1a;
 }
-
 .nt-wiz-label {
     font-size: 10px;
     color: #484848;
@@ -1105,32 +1126,930 @@
     background-color: #0a140a;
 }
 
-.nt-vars-name {
-    color: #b8b8b8;
-    font-size: 10px;
-    flex-grow: 1;
-}
-.nt-vars-type-badge {
-    font-size: 9px;
-    color: #666;
-    background-color: #1c1c1c;
-    border-color: #2a2a2a;
-    border-left-width: 1px; border-right-width: 1px;
-    border-top-width: 1px;  border-bottom-width: 1px;
-    border-top-left-radius: 2px;    border-top-right-radius: 2px;
-    border-bottom-left-radius: 2px; border-bottom-right-radius: 2px;
-    padding-left: 3px; padding-right: 3px;
+    /* ── Tab strip (graph document tabs) ── */
+.nt-tabstrip {
+    flex-direction: row;
+    background-color: #181818;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+    padding-left: 4px;
+    padding-top: 2px;
+    flex-shrink: 0;
+    min-height: 22px;
 }
 
-/* Inline variable editor (lives inside .nt-tree-item-detail) */
-.nt-vars-editor { flex-direction: column; }
-.nt-vars-editor-row {
-    flex-direction: column;
-    margin-bottom: 3px;
+.nt-tab-label {
+    color: #999;
+    font-size: 10px;
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.nt-vars-editor-label {
-    color: #555;
+
+.nt-tab-btn {
+    flex-direction: row;        
+    align-items: center;
+    background-color: #242424;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: #3a3a3a;
+    border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;
+    border-bottom-color: #2a2a2a;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-left: 10px;
+    padding-right: 6px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    margin-right: 2px;
+    white-space: nowrap;
+    overflow: visible;
+}
+
+.nt-tab-btn:hover {
+    background-color: #303030;
+    border-left-color: #505050;
+    border-right-color: #505050;
+    border-top-color: #505050;
+    border-bottom-color: #404040;
+    color: #ccc;
+}
+
+.nt-tab-btn.active-tab {
+    background-color: #1e1e1e;
+    border-bottom-color: #1e1e1e;
+}
+
+.nt-tab-btn.active-tab .nt-tab-label {
+    color: #c8c8c8;
+}
+
+.nt-tab-close {
+    background-color: #2a2a2a;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: #3a3a3a;
+    border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;
+    border-bottom-color: #3a3a3a;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px;
+    border-bottom-right-radius: 3px;
+    color: #777;
+    font-size: 10px;                  /* slightly bigger X */
+    margin-left: 8px;
+    padding: 0;
+    min-width: 18px;                  /* body size */
+    width: 18px;
+    height: 18px;
+    justify-content: center;
+    align-items: center;
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+    transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.nt-tab-close:hover {
+    background-color: #3a2020;
+    border-left-color: #602a2a;
+    border-right-color: #602a2a;
+    border-top-color: #602a2a;
+    border-bottom-color: #602a2a;
+    color: #e05050;
+}
+
+
+.nt-modal-overlay {
+    flex-grow: 1;
+    justify-content: center;
+    align-items: center;
+}
+
+
+/* modal*/
+.nt-modal-box {
+    padding: 16px;
+    border-radius: 6px;
+    background-color: #202020;
+}
+.nt-modal-message {
+    color: #c8c8c8;
+    font-size: 12px;
+    white-space: normal;
+}
+.nt-btn--danger {
+    background-color: #502020;
+    border-color: #803030;
+    color: #c04040;
+}
+.nt-btn--normal {
+    background-color: #282828;
+    border-color: #383838;
+    color: #888;
+}
+
+.nt-tree-drag-ghost {
+    background-color: rgba(60, 60, 60, 0.85);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+.nt-tree-drag-label {
+    color: #ddd;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.nt-tree-item-rename > .unity-base-text-field__input {
+    background-color: #1e1e1e;
+    border-color: #4a9a6a;
+    color: #c8c8c8;
+    font-size: 10px;
+    padding: 1px 4px;
+    margin: 0;
+    flex-grow: 1;
+}
+
+
+    /* ============================================================
+   Narrative Editor — Runtime USS
+   Covers: Run Toolbar, Graph Runtime Highlights,
+           Runtime Panel, Debugger Panel
+   ============================================================ */
+
+
+/* ============================================================
+   SHARED TOKENS
+   ============================================================ */
+
+/* Background layers */
+/* bg-deep:    #161616   canvas / dialogue area bg         */
+/* bg-base:    #191919   panel base                        */
+/* bg-raised:  #1e1e1e   panel container                   */
+/* bg-surface: #252525   option / row surface              */
+/* bg-item:    #2d2d2d   node body                         */
+
+/* Borders */
+/* border-dim:    #2a2a2a   default quiet border           */
+/* border-mid:    #333333   slightly more visible           */
+/* border-strong: #404040   node / card border             */
+
+/* Text */
+/* text-primary:   #c8c8c8 */
+/* text-secondary: #888888 */
+/* text-muted:     #555555 */
+/* text-ghost:     #444444 */
+
+/* Accent — green (active/running) */
+/* green-text:   #7dcfa0 */
+/* green-border: #4a9a6a */
+/* green-bg:     #2d3a2d */
+
+/* Accent — red (stop / error) */
+/* red-text:   #e08080 */
+/* red-border: #7a3030 */
+/* red-bg:     #3a1a1a */
+
+/* Accent — amber (changed values / conditional bp) */
+/* amber-text:   #c8a040 */
+/* amber-bg:     #1a1500 */
+/* amber-border: #2a2a00 */
+
+
+/* ============================================================
+   1. RUN TOOLBAR
+   ============================================================ */
+
+.run-toolbar {
+    flex-direction: row;
+    align-items: center;
+    background-color: #191919;
+    border-width: 1px;
+    border-color: #2a2a2a;
+    border-radius: 5px;
+    padding: 3px;
+}
+
+.run-toolbar__separator {
+    width: 1px;
+    height: 22px;
+    background-color: #2a2a2a;
+    margin-left: 1px;
+    margin-right: 1px;
+}
+
+/* Base button — shared by all three */
+.run-toolbar__btn {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border-width: 1px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 12px;
+    padding-right: 12px;
+    font-size: 11px;
+    -unity-font-style: normal;
+    /* icon + label gap handled by margin on icon child */
+}
+
+.run-toolbar__btn-icon {
+    width: 13px;
+    height: 14px;
+    margin-right: 6px;
+}
+
+.run-toolbar__btn-icon--stop {
+    width: 12px;
+    height: 12px;
+    margin-right: 6px;
+}
+
+/* Project play — neutral */
+.run-toolbar__btn--project {
+    background-color: #1c1c1c;
+    border-color: #333333;
+    color: #888888;
+}
+
+.run-toolbar__btn--project:hover {
+    background-color: #252525;
+    color: #aaaaaa;
+}
+
+/* Graph play — green primary */
+.run-toolbar__btn--graph {
+    background-color: #2d3a2d;
+    border-color: #4a9a6a;
+    color: #7dcfa0;
+}
+
+.run-toolbar__btn--graph:hover {
+    background-color: #344a34;
+}
+
+/* Stop — red */
+.run-toolbar__btn--stop {
+    background-color: #3a1a1a;
+    border-color: #7a3030;
+    color: #e08080;
+    padding-left: 14px;
+    padding-right: 14px;
+    -unity-font-style: bold;
+}
+
+.run-toolbar__btn--stop:hover {
+    background-color: #4a2020;
+}
+
+/* Disabled state (play buttons while running) */
+.run-toolbar__btn--disabled {
+    opacity: 0.4;
+}
+
+/* Run indicator ("● from graph") shown while running */
+.run-toolbar__run-indicator {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.run-toolbar__run-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 3px;
+    background-color: #e05050;
+    margin-right: 4px;
+}
+
+.run-toolbar__run-label {
     font-size: 9px;
-    margin-bottom: 2px;
+    color: #c07070;
 }
-.nt-vars-input { font-size: 10px; }
+
+
+/* ============================================================
+   2. GRAPH RUNTIME NODE HIGHLIGHTS
+   ============================================================ */
+
+/* Applied to any node the execution path has passed through */
+.graph-node--visited {
+    border-width: 1px;
+    border-color: #4a9a6a;
+    opacity: 0.7; /* inner glow implied by color; full opacity on border */
+}
+
+/* The node currently being executed */
+.graph-node--active {
+    border-width: 2px;
+    border-color: #f0f0f0;
+}
+
+/* Outer pulse ring — position:absolute sibling behind the node */
+.graph-node--active-ring {
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    position: absolute;
+    /* sizing: set width/height to node size + 6px each side in code */
+}
+
+/* Red dot badge — position:absolute, top-right of active node header */
+.graph-node__active-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: #e05050;
+    position: absolute;
+    right: 6px;
+    top: 4px;
+}
+
+/* Exit port dot — visited (green) vs default (gray) */
+.graph-port--visited {
+    background-color: #4a9a6a;
+    opacity: 0.8;
+}
+
+.graph-port--default {
+    background-color: #cfcfcf;
+}
+
+/* Nodes that haven't been reached yet — dim them */
+.graph-node--unreached {
+    opacity: 0.4;
+}
+
+/* USS cannot style SVG paths directly.
+   Handle edge colors in C# by setting IStyle.borderColor
+   or by swapping between these classes on a VisualElement
+   that wraps or represents the edge. */
+
+/* Edge VisualElement wrapper — visited path */
+.graph-edge--visited {
+    border-color: #7dcfa0;
+    /* stroke-width equivalent: set in C# via style.borderBottomWidth etc. */
+}
+
+/* Edge — pending / not yet traversed */
+.graph-edge--pending {
+    border-color: #333333;
+    opacity: 0.5;
+}
+
+
+/* ============================================================
+   3. RUNTIME PANEL
+   ============================================================ */
+
+.runtime-panel {
+    background-color: #1e1e1e;
+    border-width: 1px;
+    border-color: #2a2a2a;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-direction: column;
+}
+
+/* ---- Title bar ---- */
+.runtime-panel__titlebar {
+    flex-direction: row;
+    align-items: center;
+    height: 28px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: #191919;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+}
+
+.runtime-panel__title {
+    font-size: 10px;
+    color: #c07070;
+    -unity-font-style: bold;
+    flex-grow: 1;
+    margin-left: 6px;
+}
+
+.runtime-panel__title-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: #e05050;
+}
+
+/* ---- Playback controls ---- */
+.runtime-panel__controls {
+    flex-direction: row;
+    align-items: center;
+}
+
+.runtime-panel__ctrl-btn {
+    background-color: #1c1c1c;
+    border-width: 1px;
+    border-color: #333333;
+    border-radius: 3px;
+    color: #666666;
+    font-size: 9px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    padding-left: 5px;
+    padding-right: 5px;
+    margin-left: 2px;
+}
+
+.runtime-panel__ctrl-btn:hover {
+    color: #888888;
+    background-color: #252525;
+}
+
+.runtime-panel__ctrl-btn--primary {
+    background-color: #2d3a2d;
+    border-color: #4a9a6a;
+    color: #7dcfa0;
+}
+
+.runtime-panel__ctrl-btn--primary:hover {
+    background-color: #344a34;
+}
+
+.runtime-panel__speed-select {
+    background-color: #1c1c1c;
+    border-width: 1px;
+    border-color: #333333;
+    border-radius: 3px;
+    color: #666666;
+    font-size: 9px;
+    margin-left: 2px;
+}
+
+/* ---- Dialogue area ---- */
+.runtime-panel__dialogue-area {
+    background-color: #161616;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+    padding: 10px 12px;
+    min-height: 100px;
+    flex-direction: column;
+}
+
+.runtime-panel__speaker-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.runtime-panel__speaker-avatar {
+    width: 22px;
+    height: 22px;
+    background-color: #2d3a2d;
+    border-width: 1px;
+    border-color: #4a9a6a;
+    border-radius: 3px;
+    align-items: center;
+    justify-content: center;
+    margin-right: 6px;
+}
+
+.runtime-panel__speaker-initial {
+    font-size: 8px;
+    color: #7dcfa0;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.runtime-panel__speaker-name {
+    font-size: 11px;
+    color: #7dcfa0;
+    -unity-font-style: bold;
+}
+
+.runtime-panel__stage-direction {
+    font-size: 10px;
+    color: #555555;
+    -unity-font-style: italic;
+    margin-bottom: 6px;
+    margin-left: 2px;
+}
+
+.runtime-panel__dialogue-text {
+    font-size: 11px;
+    color: #d8d8d8;
+    white-space: normal;
+    /* line-height not directly supported; use padding for breathing room */
+}
+
+/* ---- Choices ---- */
+.runtime-panel__choices {
+    flex-direction: column;
+    background-color: #191919;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+    padding: 8px 10px;
+}
+
+.runtime-panel__choices-label {
+    font-size: 8px;
+    color: #444444;
+    margin-bottom: 4px;
+}
+
+.runtime-panel__choice-btn {
+    background-color: #252525;
+    border-width: 1px;
+    border-color: #383838;
+    border-radius: 4px;
+    color: #c8c8c8;
+    font-size: 10px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-bottom: 4px;
+    -unity-text-align: middle-left;
+}
+
+.runtime-panel__choice-btn:hover {
+    border-color: #5a5a5a;
+}
+
+.runtime-panel__choice-btn:active {
+    background-color: #2d3a2d;
+    border-color: #4a9a6a;
+    color: #7dcfa0;
+}
+
+/* ---- Footer ---- */
+.runtime-panel__footer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    padding-left: 10px;
+    padding-right: 10px;
+    background-color: #161616;
+}
+
+.runtime-panel__footer-label {
+    font-size: 9px;
+    color: #333333;
+}
+
+
+/* ============================================================
+   4. DEBUGGER PANEL
+   ============================================================ */
+
+.debugger-panel {
+    background-color: #1e1e1e;
+    border-width: 1px;
+    border-color: #2a2a2a;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-direction: column;
+}
+
+/* ---- Title bar + tabs ---- */
+.debugger-panel__titlebar {
+    flex-direction: row;
+    align-items: center;
+    height: 28px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: #191919;
+    border-bottom-width: 1px;
+    border-bottom-color: #2a2a2a;
+}
+
+.debugger-panel__title {
+    font-size: 10px;
+    color: #888888;
+    -unity-font-style: bold;
+    flex-grow: 1;
+}
+
+.debugger-panel__tabs {
+    flex-direction: row;
+}
+
+.debugger-tab {
+    background-color: transparent;
+    border-width: 1px;
+    border-color: transparent;
+    border-radius: 3px;
+    color: #555555;
+    font-size: 9px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-left: 2px;
+}
+
+.debugger-tab:hover {
+    color: #888888;
+}
+
+.debugger-tab--active {
+    background-color: #252525;
+    border-color: #3a3a3a;
+    color: #7dcfa0;
+}
+
+/* ---- Shared column header ---- */
+.debugger-panel__col-header {
+    flex-direction: row;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: #222222;
+}
+
+.debugger-panel__col-header-cell {
+    font-size: 9px;
+    color: #444444;
+}
+
+/* ---- Shared row ---- */
+.debugger-row {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: #222222;
+}
+
+.debugger-row:hover {
+    background-color: #212121;
+}
+
+/* ---- Shared footer ---- */
+.debugger-panel__footer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-top-width: 1px;
+    border-top-color: #1a1a1a;
+}
+
+.debugger-panel__footer-label {
+    font-size: 9px;
+    color: #333333;
+}
+
+.debugger-panel__footer-btn {
+    background-color: transparent;
+    border-width: 0;
+    color: #444444;
+    font-size: 9px;
+}
+
+.debugger-panel__footer-btn:hover {
+    color: #888888;
+}
+
+/* ---- Watch tab ---- */
+.debugger-watch__row--changed-amber {
+    background-color: #1a1500;
+    border-bottom-color: #211e00;
+}
+
+.debugger-watch__row--changed-green {
+    background-color: #0d1a10;
+    border-bottom-color: #0f2012;
+}
+
+.debugger-watch__name {
+    font-size: 10px;
+    color: #b8b8b8;
+    flex-grow: 1;
+}
+
+.debugger-watch__name--unchanged {
+    color: #777777;
+}
+
+.debugger-watch__value {
+    font-size: 10px;
+    color: #888888;
+    min-width: 60px;
+}
+
+.debugger-watch__value--amber {
+    color: #c8a040;
+    -unity-font-style: bold;
+}
+
+.debugger-watch__value--green {
+    color: #7dcfa0;
+    -unity-font-style: bold;
+}
+
+.debugger-watch__type-badge {
+    font-size: 8px;
+    color: #555555;
+    background-color: #1c1c1c;
+    border-width: 1px;
+    border-color: #2a2a2a;
+    border-radius: 2px;
+    padding-left: 3px;
+    padding-right: 3px;
+    min-width: 30px;
+    -unity-text-align: middle-center;
+}
+
+.debugger-watch__prev {
+    font-size: 10px;
+    color: #555555;
+    min-width: 50px;
+}
+
+.debugger-watch__prev--strikethrough {
+    /* USS does not support text-decoration.
+       Use a separate VisualElement line overlay in C# for strikethrough. */
+    color: #555555;
+}
+
+.debugger-watch__delta {
+    font-size: 8px;
+    margin-left: 4px;
+}
+
+.debugger-watch__delta--up {
+    color: #c8a040;
+}
+
+.debugger-watch__delta--changed {
+    color: #7dcfa0;
+}
+
+/* ---- Log tab ---- */
+.debugger-log__row--active {
+    background-color: #191919;
+}
+
+.debugger-log__timestamp {
+    font-size: 9px;
+    color: #555555;
+    min-width: 32px;
+}
+
+.debugger-log__step {
+    font-size: 9px;
+    color: #555555;
+    min-width: 24px;
+}
+
+.debugger-log__node-label {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.debugger-log__active-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: #e05050;
+    margin-right: 4px;
+}
+
+.debugger-log__node-name {
+    font-size: 10px;
+    color: #777777;
+}
+
+.debugger-log__node-name--active {
+    color: #c8c8c8;
+}
+
+.debugger-log__type-badge {
+    font-size: 8px;
+    border-width: 1px;
+    border-radius: 2px;
+    padding-left: 4px;
+    padding-right: 4px;
+    min-width: 48px;
+    -unity-text-align: middle-center;
+}
+
+.debugger-log__type-badge--default {
+    color: #555555;
+    background-color: #1c1c1c;
+    border-color: #2a2a2a;
+}
+
+.debugger-log__type-badge--choice {
+    color: #c8a040;
+    background-color: #1a1500;
+    border-color: #2a2a00;
+}
+
+.debugger-log__type-badge--dialogue {
+    color: #4a8ac8;
+    background-color: #0d1a2a;
+    border-color: #1a2a3a;
+}
+
+.debugger-log__type-badge--setvar {
+    color: #7dcfa0;
+    background-color: #0d1a10;
+    border-color: #1a2a1a;
+}
+
+/* ---- Breakpoints tab ---- */
+.debugger-bp__row {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: #222222;
+}
+
+.debugger-bp__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.debugger-bp__dot--active {
+    background-color: #c07070;
+}
+
+.debugger-bp__dot--disabled {
+    background-color: #3a3a3a;
+    border-width: 1px;
+    border-color: #555555;
+}
+
+.debugger-bp__dot--conditional {
+    background-color: #a07820;
+}
+
+.debugger-bp__info {
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.debugger-bp__node-name {
+    font-size: 10px;
+    color: #c8c8c8;
+}
+
+.debugger-bp__node-name--disabled {
+    color: #666666;
+}
+
+.debugger-bp__location {
+    font-size: 9px;
+    color: #555555;
+}
+
+.debugger-bp__location--disabled {
+    color: #444444;
+}
+
+.debugger-bp__remove-btn {
+    background-color: transparent;
+    border-width: 0;
+    color: #333333;
+    font-size: 9px;
+}
+
+.debugger-bp__remove-btn:hover {
+    color: #666666;
+}
+
+.debugger-bp__hint {
+    font-size: 9px;
+    color: #444444;
+    -unity-font-style: italic;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-left: 10px;
+    padding-right: 10px;
+}

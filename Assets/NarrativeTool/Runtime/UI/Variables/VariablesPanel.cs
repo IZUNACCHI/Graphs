@@ -1,8 +1,10 @@
 using NarrativeTool.Core.Commands;
+using NarrativeTool.Core.Commands.Generic;
 using NarrativeTool.Core.ContextMenu;
 using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Data.Project;
 using NarrativeTool.UI.FolderTree;
+using NarrativeTool.UI.Widgets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,14 +13,6 @@ using UnityEngine.UIElements;
 
 namespace NarrativeTool.UI.Variables
 {
-    /// <summary>
-    /// Sidebar panel listing project variables grouped by folder, with inline
-    /// editing of the selected item. All mutations go through commands on
-    /// <see cref="SessionState.ProjectCommands"/>.
-    ///
-    /// Folder rendering is delegated to <see cref="FolderTreeView"/> — a
-    /// reusable widget that the future Graphs panel will share.
-    /// </summary>
     public sealed class VariablesPanel : VisualElement
     {
         private ProjectModel project;
@@ -26,27 +20,18 @@ namespace NarrativeTool.UI.Variables
         private ContextMenuController contextMenu;
         private EventBus bus;
 
-        // UI
         private TextField filterField;
         private FolderTreeView tree;
 
-        // Local state
         private string selectedId;
-        // When set, the inline name field of the selected variable should
-        // grab focus on next rebuild — used after "Rename" is chosen so the
-        // user lands directly in the name input.
         private string focusNameForId;
 
-        private IDisposable subAdded, subRemoved, subRenamed, subTypeChanged, subDefaultChanged, subMoved;
-        private IDisposable subFolderAdded, subFolderRemoved, subFolderRenamed, subEnumTypeChanged;
-        private IDisposable subEnumDefAdded, subEnumDefRemoved, subEnumDefRenamed, subEnumMemberChanged;
+        private readonly List<IDisposable> subs = new();
 
         public VariablesPanel()
         {
             AddToClassList("nt-vars");
             focusable = true;
-            // Tabs are owned by the parent ProjectSidebar; this panel renders
-            // only its own filter + tree + inline editor.
 
             // ── Filter row ──
             var filterRow = new VisualElement();
@@ -65,48 +50,23 @@ namespace NarrativeTool.UI.Variables
             filterRow.Add(filterField);
 
             var addBtn = new Button(() => AddVariable("")) { text = "+" };
-            // Note: + button always adds at root. To add inside a folder use
-            // the folder's right-click menu.
             addBtn.AddToClassList("nt-vars-add-btn");
             filterRow.Add(addBtn);
 
+            var addFolderBtn = new Button(() => AddFolder("")) { text = "📁" };
+            addFolderBtn.AddToClassList("nt-vars-add-btn");
+            addFolderBtn.tooltip = "New folder";
+            filterRow.Add(addFolderBtn);
+
             Add(filterRow);
 
-            // ── Tree ──
+            // ── Tree (bare, no data callbacks yet) ──
             tree = new FolderTreeView
             {
-                GetFolders = () => project?.Variables.Folders ?? (IReadOnlyList<string>)Array.Empty<string>(),
-                GetItems = () => project?.Variables.Variables.Cast<object>() ?? Enumerable.Empty<object>(),
-                GetItemFolder = item => ((VariableDefinition)item).FolderPath,
-                GetItemId = item => ((VariableDefinition)item).Id,
-                GetItemSearchText = item =>
-                {
-                    var v = (VariableDefinition)item;
-                    return v.Name + " " + v.FolderPath;
-                },
+                ShowSearchBar = false,
+                RootDisplayName = null,
                 BuildItemHeader = item => BuildVariableHeader((VariableDefinition)item),
                 BuildItemDetail = item => BuildVariableEditor((VariableDefinition)item),
-                OnItemClicked = item => SelectVariable(((VariableDefinition)item).Id, toggle: true),
-                OnItemContextMenu = (item, pos) =>
-                {
-                    var v = (VariableDefinition)item;
-                    SelectVariable(v.Id, toggle: false);
-                    contextMenu?.Open(new VariableContextTarget(this, v), pos);
-                },
-                OnFolderContextMenu = (folder, pos) =>
-                    contextMenu?.Open(new VariableFolderContextTarget(this, folder), pos),
-                OnEmptyContextMenu = (parent, pos) =>
-                    contextMenu?.Open(new VariableFolderContextTarget(this, parent), pos),
-                OnFolderRenameCommit = (oldPath, newPath) =>
-                {
-                    if (project.Variables.FolderExists(newPath))
-                    {
-                        Debug.LogWarning($"[Variables] Folder '{newPath}' already exists.");
-                        Rebuild();
-                        return;
-                    }
-                    Commands.Execute(new RenameVariableFolderCmd(project, bus, oldPath, newPath));
-                },
             };
             Add(tree);
 
@@ -122,45 +82,119 @@ namespace NarrativeTool.UI.Variables
             this.contextMenu = contextMenu;
             this.bus = session.Bus;
 
-            subAdded = bus.Subscribe<VariableAddedEvent>(_ => Rebuild());
-            subRemoved = bus.Subscribe<VariableRemovedEvent>(e =>
+            // ── Wire the tree with data, events, and drag‑drop ──
+            WireTree();
+
+            // ── Event subscriptions ──
+            subs.Add(bus.Subscribe<VariableAddedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<VariableRemovedEvent>(e =>
             {
                 if (selectedId == e.VariableId) selectedId = null;
                 Rebuild();
-            });
-            subRenamed = bus.Subscribe<VariableRenamedEvent>(_ => Rebuild());
-            subTypeChanged = bus.Subscribe<VariableTypeChangedEvent>(_ => Rebuild());
-            subDefaultChanged = bus.Subscribe<VariableDefaultChangedEvent>(_ => Rebuild());
-            subMoved = bus.Subscribe<VariableMovedEvent>(_ => Rebuild());
-            subFolderAdded = bus.Subscribe<VariableFolderAddedEvent>(_ => Rebuild());
-            subFolderRemoved = bus.Subscribe<VariableFolderRemovedEvent>(_ => Rebuild());
-            subFolderRenamed = bus.Subscribe<VariableFolderRenamedEvent>(_ => Rebuild());
-            subEnumTypeChanged = bus.Subscribe<VariableEnumTypeChangedEvent>(_ => Rebuild());
-            // The variable editor's enum picker depends on enum CRUD too.
-            subEnumDefAdded = bus.Subscribe<EnumAddedEvent>(_ => Rebuild());
-            subEnumDefRemoved = bus.Subscribe<EnumRemovedEvent>(_ => Rebuild());
-            subEnumDefRenamed = bus.Subscribe<EnumRenamedEvent>(_ => Rebuild());
-            subEnumMemberChanged = bus.Subscribe<EnumMemberChangedEvent>(_ => Rebuild());
+            }));
+            subs.Add(bus.Subscribe<VariableRenamedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<VariableTypeChangedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<VariableDefaultChangedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<VariableMovedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<VariableFolderAddedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<VariableFolderRemovedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<VariableFolderRenamedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<VariableEnumTypeChangedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<EnumAddedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<EnumRemovedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<EnumRenamedEvent>(_ => Rebuild()));
+            subs.Add(bus.Subscribe<EnumMemberChangedEvent>(_ => Rebuild()));
 
             Rebuild();
         }
 
         public void Unbind()
         {
-            subAdded?.Dispose(); subAdded = null;
-            subRemoved?.Dispose(); subRemoved = null;
-            subRenamed?.Dispose(); subRenamed = null;
-            subTypeChanged?.Dispose(); subTypeChanged = null;
-            subDefaultChanged?.Dispose(); subDefaultChanged = null;
-            subMoved?.Dispose(); subMoved = null;
-            subFolderAdded?.Dispose(); subFolderAdded = null;
-            subFolderRemoved?.Dispose(); subFolderRemoved = null;
-            subFolderRenamed?.Dispose(); subFolderRenamed = null;
-            subEnumTypeChanged?.Dispose(); subEnumTypeChanged = null;
-            subEnumDefAdded?.Dispose(); subEnumDefAdded = null;
-            subEnumDefRemoved?.Dispose(); subEnumDefRemoved = null;
-            subEnumDefRenamed?.Dispose(); subEnumDefRenamed = null;
-            subEnumMemberChanged?.Dispose(); subEnumMemberChanged = null;
+            // Dispose subscriptions
+            foreach (var s in subs) s?.Dispose();
+            subs.Clear();
+
+            // Remove any open modals
+            foreach (var child in Children().OfType<ModalConfirm>().ToList())
+                child.RemoveFromHierarchy();
+
+            // Clear tree bindings
+            if (tree != null)
+            {
+                tree.GetFolders = null;
+                tree.GetItems = null;
+                tree.GetItemFolder = null;
+                tree.GetItemId = null;
+                tree.GetItemSearchText = null;
+                tree.OnItemClicked = null;
+                tree.OnItemDoubleClicked = null;
+                tree.OnItemContextMenu = null;
+                tree.OnFolderContextMenu = null;
+                tree.OnEmptyContextMenu = null;
+                tree.OnFolderRenameCommit = null;
+                tree.OnItemMoved = null;
+                tree.OnFolderMoved = null;
+                tree.AllowDragDrop = false;
+                tree.Rebuild();
+            }
+        }
+
+        // ─── Wire data, events, drag‑drop to the tree ───
+        private void WireTree()
+        {
+            tree.GetFolders = () => project.Variables.Folders;
+            tree.GetItems = () => project?.Variables.Items.Cast<object>();
+            tree.GetItemFolder = item => ((VariableDefinition)item).FolderPath;
+            tree.GetItemId = item => ((VariableDefinition)item).Id;
+            tree.GetItemSearchText = item =>
+            {
+                var v = (VariableDefinition)item;
+                return v.Name + " " + v.FolderPath;
+            };
+
+            tree.OnItemClicked = item => SelectVariable(((VariableDefinition)item).Id, toggle: true);
+            tree.OnItemContextMenu = (item, pos) =>
+            {
+                var v = (VariableDefinition)item;
+                SelectVariable(v.Id, toggle: false);
+                contextMenu?.Open(new VariableContextTarget(this, v), pos);
+            };
+            tree.OnFolderContextMenu = (folder, pos) =>
+                contextMenu?.Open(new VariableFolderContextTarget(this, folder), pos);
+            tree.OnEmptyContextMenu = (parent, pos) =>
+                contextMenu?.Open(new VariableFolderContextTarget(this, parent), pos);
+            tree.OnFolderRenameCommit = (oldPath, newPath) =>
+            {
+                CommitFolderRename(oldPath, newPath);
+            };
+
+            // Drag‑and‑drop
+            tree.AllowDragDrop = true;
+
+            tree.OnItemMoved = (item, newFolder) =>
+            {
+                var v = (VariableDefinition)item;
+                if (v.FolderPath == newFolder) return;
+                Commands.Execute(new MoveItemCmd<VariableDefinition>(
+                    "Variable", v, project.Variables,
+                    v.FolderPath, newFolder,
+                    doPublish: () => { }, undoPublish: () => { }
+                ));
+                Rebuild();
+            };
+
+            tree.OnFolderMoved = (folderPath, newParent) =>
+            {
+                string folderName = folderPath.Split('/').Last();
+                string newPath = string.IsNullOrEmpty(newParent) ? folderName : newParent + "/" + folderName;
+                Commands.Execute(new RenameFolderCmd<VariableDefinition>(
+                    "Variable", project.Variables,
+                    folderPath, newPath,
+                    onRename: (o, n) => { },
+                    onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+                ));
+                Rebuild();
+            };
         }
 
         private CommandSystem Commands => session.ProjectCommands;
@@ -172,8 +206,7 @@ namespace NarrativeTool.UI.Variables
             tree.Rebuild();
         }
 
-        // ───────── Variable commands ─────────
-
+        // ───────── Variable commands (unchanged) ─────────
         public void AddVariable(string folderPath)
         {
             string baseName = "newVariable";
@@ -189,92 +222,33 @@ namespace NarrativeTool.UI.Variables
                 defaultValue: VariableStore.DefaultFor(VariableType.Int),
                 folderPath: folderPath ?? "");
 
-            Commands.Execute(new AddVariableCmd(project, bus, v));
+            Commands.Execute(new AddItemCmd<VariableDefinition>(
+                "Variable",
+                project.Variables,
+                v,
+                doPublish: () => bus.Publish(new VariableAddedEvent(project.Id, v.Id)),
+                undoPublish: () => bus.Publish(new VariableRemovedEvent(project.Id, v.Id))
+            ));
             selectedId = v.Id;
-            focusNameForId = v.Id;   // jump straight into the name field
+            focusNameForId = v.Id;
             Rebuild();
         }
 
         public void RemoveVariable(string variableId)
         {
-            Commands.Execute(new RemoveVariableCmd(project, bus, variableId));
+            Commands.Execute(new RemoveItemCmd<VariableDefinition>(
+                "Variable",
+                project.Variables,
+                variableId,
+                doPublish: () => bus.Publish(new VariableRemovedEvent(project.Id, variableId)),
+                undoPublish: () => bus.Publish(new VariableAddedEvent(project.Id, variableId))
+            ));
         }
 
         public void BeginRenameVariable(string variableId)
         {
             selectedId = variableId;
             focusNameForId = variableId;
-            Rebuild();
-        }
-
-        // ───────── Folder commands ─────────
-
-        /// <summary>
-        /// Adds a new folder as a child of <paramref name="parent"/>. Pass ""
-        /// for a root-level folder.
-        /// </summary>
-        public void AddFolder(string parent)
-        {
-            string parentPrefix = string.IsNullOrEmpty(parent) ? "" : parent + "/";
-            string baseName = "newFolder";
-            string name = baseName;
-            int n = 1;
-            while (project.Variables.FolderExists(parentPrefix + name)) name = $"{baseName}{++n}";
-            string fullPath = parentPrefix + name;
-            Commands.Execute(new AddVariableFolderCmd(project, bus, fullPath));
-            // Make sure the parent folder is open so the new child is visible.
-            if (!string.IsNullOrEmpty(parent)) tree.SetFolderCollapsed(parent, false);
-            BeginRenameFolder(fullPath);
-        }
-
-        public void RemoveFolder(string folderPath)
-        {
-            // Cascade delete every nested folder + every variable in any of
-            // them, then the folder itself. One transaction so undo restores
-            // the whole subtree.
-            using var tx = Commands.BeginTransaction($"Remove folder \"{folderPath}\"");
-
-            string prefix = folderPath + "/";
-            var nestedFolders = project.Variables.Folders
-                .Where(f => f != null && f.StartsWith(prefix))
-                .ToList();
-            var allFolders = new List<string>(nestedFolders) { folderPath };
-
-            var inSubtree = project.Variables.Variables
-                .Where(v => v.FolderPath == folderPath
-                         || (v.FolderPath != null && v.FolderPath.StartsWith(prefix)))
-                .Select(v => v.Id)
-                .ToList();
-
-            foreach (var id in inSubtree)
-                Commands.Execute(new RemoveVariableCmd(project, bus, id));
-            // Remove deepest paths first so each individual command sees a
-            // consistent state on undo.
-            foreach (var f in allFolders.OrderByDescending(s => s.Length))
-                Commands.Execute(new RemoveVariableFolderCmd(project, bus, f));
-        }
-
-        public void BeginRenameFolder(string folderPath)
-        {
-            if (string.IsNullOrEmpty(folderPath)) return;
-            tree.RenamingFolderPath = folderPath;
-            // Make sure the folder is expanded so the user can see what's inside.
-            tree.SetFolderCollapsed(folderPath, false);
-            tree.Rebuild();
-        }
-
-        // ───────── Selection / inline edit ─────────
-
-        private void SelectVariable(string id, bool toggle)
-        {
-            if (toggle && selectedId == id)
-            {
-                selectedId = null;
-            }
-            else
-            {
-                selectedId = id;
-            }
             Rebuild();
         }
 
@@ -287,7 +261,14 @@ namespace NarrativeTool.UI.Variables
                 Debug.LogWarning($"[Variables] Name '{newName}' already exists in folder '{v.FolderPath}'.");
                 return;
             }
-            Commands.Execute(new RenameVariableCmd(project, bus, v.Id, v.Name, newName));
+            Commands.Execute(new RenameItemCmd<VariableDefinition>(
+                "Variable",
+                v,
+                v.Name,
+                newName,
+                doPublish: () => bus.Publish(new VariableRenamedEvent(project.Id, v.Id, v.Name, newName)),
+                undoPublish: () => bus.Publish(new VariableRenamedEvent(project.Id, v.Id, newName, v.Name))
+            ));
         }
 
         private void CommitDefault(VariableDefinition v, object newValue)
@@ -296,22 +277,87 @@ namespace NarrativeTool.UI.Variables
             Commands.Execute(new SetVariableDefaultCmd(project, bus, v.Id, v.DefaultValue, newValue));
         }
 
-        // ───────── Row builders ─────────
+        // ───────── Folder commands ─────────
+        public void AddFolder(string parent)
+        {
+            string parentPrefix = string.IsNullOrEmpty(parent) ? "" : parent + "/";
+            string baseName = "newFolder";
+            string name = baseName;
+            int n = 1;
+            while (project.Variables.Folders.Contains(parentPrefix + name))
+                name = $"{baseName}{++n}";
+            string fullPath = parentPrefix + name;
 
+            Commands.Execute(new AddFolderCmd<VariableDefinition>(
+                "Variable",
+                project.Variables,
+                fullPath,
+                doPublish: () => bus.Publish(new VariableFolderAddedEvent(project.Id, fullPath)),
+                undoPublish: () => bus.Publish(new VariableFolderRemovedEvent(project.Id, fullPath))
+            ));
+            if (!string.IsNullOrEmpty(parent)) tree.SetFolderCollapsed(parent, false);
+            BeginRenameFolder(fullPath);
+        }
+
+        public void RemoveFolder(string folderPath)
+        {
+            Commands.Execute(new RemoveFolderCmd<VariableDefinition>(
+                "Variable",
+                project.Variables,
+                folderPath,
+                onItemRemoved: v => bus.Publish(new VariableRemovedEvent(project.Id, v.Id)),
+                onFolderRemoved: f => bus.Publish(new VariableFolderRemovedEvent(project.Id, f)),
+                onItemRestored: v => bus.Publish(new VariableAddedEvent(project.Id, v.Id)),
+                onFolderRestored: f => bus.Publish(new VariableFolderAddedEvent(project.Id, f))
+            ));
+        }
+
+        public void BeginRenameFolder(string folderPath)
+        {
+            if (string.IsNullOrEmpty(folderPath)) return;
+            tree.RenamingFolderPath = folderPath;
+            tree.SetFolderCollapsed(folderPath, false);
+            tree.Rebuild();
+        }
+
+        private void CommitFolderRename(string oldPath, string newPath)
+        {
+            if (project.Variables.Folders.Contains(newPath))
+            {
+                Debug.LogWarning($"[Variables] Folder '{newPath}' already exists.");
+                tree.Rebuild();
+                return;
+            }
+            Commands.Execute(new RenameFolderCmd<VariableDefinition>(
+                "Variable",
+                project.Variables,
+                oldPath,
+                newPath,
+                onRename: (o, n) => bus.Publish(new VariableFolderRenamedEvent(project.Id, o, n)),
+                onItemPathChanged: (item, oldItemPath, newItemPath) => { }
+            ));
+        }
+
+        // ───────── Selection / inline edit ─────────
+        private void SelectVariable(string id, bool toggle)
+        {
+            if (toggle && selectedId == id) selectedId = null;
+            else selectedId = id;
+            Rebuild();
+        }
+
+        // ───────── Row builders (unchanged) ─────────
         private VisualElement BuildVariableHeader(VariableDefinition v)
         {
             var row = new VisualElement();
             row.AddToClassList("nt-vars-row");
-
             var swatch = new VisualElement();
             swatch.AddToClassList("nt-vars-swatch");
             swatch.AddToClassList("nt-vars-swatch--" + v.Type.ToString().ToLower());
             row.Add(swatch);
-
             var name = new Label(v.Name);
             name.AddToClassList("nt-vars-name");
             row.Add(name);
-
             var typeBadge = new Label(v.Type.ToString().ToLower());
             typeBadge.AddToClassList("nt-vars-type-badge");
             row.Add(typeBadge);
@@ -323,7 +369,6 @@ namespace NarrativeTool.UI.Variables
             var editor = new VisualElement();
             editor.AddToClassList("nt-vars-editor");
 
-            // Name
             var nameRow = BuildEditorRow("Name");
             var nameField = new TextField { value = v.Name };
             nameField.AddToClassList("nt-vars-input");
@@ -345,7 +390,6 @@ namespace NarrativeTool.UI.Variables
             nameRow.Add(nameField);
             editor.Add(nameRow);
 
-            // If this is the variable that just asked for focus, grab it next frame.
             if (focusNameForId == v.Id)
             {
                 focusNameForId = null;
@@ -356,7 +400,6 @@ namespace NarrativeTool.UI.Variables
                 }).StartingIn(0);
             }
 
-            // Type
             var typeRow = BuildEditorRow("Type");
             var typeChoices = Enum.GetNames(typeof(VariableType)).ToList();
             var typeField = new DropdownField(typeChoices, (int)v.Type);
@@ -371,7 +414,6 @@ namespace NarrativeTool.UI.Variables
             typeRow.Add(typeField);
             editor.Add(typeRow);
 
-            // Enum type picker (only when Type == Enum)
             if (v.Type == VariableType.Enum)
             {
                 var enumRow = BuildEditorRow("Enum");
@@ -379,7 +421,6 @@ namespace NarrativeTool.UI.Variables
                 editor.Add(enumRow);
             }
 
-            // Default
             var defRow = BuildEditorRow("Default");
             defRow.Add(BuildDefaultInput(v));
             editor.Add(defRow);
@@ -389,14 +430,13 @@ namespace NarrativeTool.UI.Variables
 
         private VisualElement BuildEnumTypePicker(VariableDefinition v)
         {
-            var enums = project.Enums.Enums;
+            var enums = project.Enums.Items;
             if (enums.Count == 0)
             {
                 var msg = new Label("(no enums defined)");
                 msg.AddToClassList("nt-vars-input");
                 return msg;
             }
-
             var names = enums.Select(e => e.Name).ToList();
             int currentIdx = enums.FindIndex(e => e.Id == v.EnumTypeId);
             var dd = new DropdownField(names, Mathf.Max(0, currentIdx));
@@ -418,56 +458,56 @@ namespace NarrativeTool.UI.Variables
             switch (v.Type)
             {
                 case VariableType.Int:
-                {
-                    var f = new IntegerField { value = v.DefaultValue is int i ? i : 0 };
-                    f.AddToClassList("nt-vars-input");
-                    f.RegisterCallback<BlurEvent>(_ => CommitDefault(v, f.value));
-                    return f;
-                }
-                case VariableType.Float:
-                {
-                    var f = new FloatField { value = v.DefaultValue is float fl ? fl : 0f };
-                    f.AddToClassList("nt-vars-input");
-                    f.RegisterCallback<BlurEvent>(_ => CommitDefault(v, f.value));
-                    return f;
-                }
-                case VariableType.Bool:
-                {
-                    var f = new Toggle { value = v.DefaultValue is bool b && b };
-                    f.AddToClassList("nt-vars-input");
-                    f.RegisterValueChangedCallback(evt => CommitDefault(v, evt.newValue));
-                    return f;
-                }
-                case VariableType.String:
-                {
-                    var f = new TextField { value = v.DefaultValue as string ?? "" };
-                    f.AddToClassList("nt-vars-input");
-                    f.RegisterCallback<BlurEvent>(_ => CommitDefault(v, f.value));
-                    return f;
-                }
-                case VariableType.Enum:
-                {
-                    var enumDef = project.Enums.Find(v.EnumTypeId);
-                    if (enumDef == null || enumDef.Members.Count == 0)
                     {
-                        var msg = new Label(enumDef == null
-                            ? "(pick an enum first)"
-                            : "(enum has no members)");
-                        msg.AddToClassList("nt-vars-input");
-                        return msg;
+                        var f = new IntegerField { value = v.DefaultValue is int i ? i : 0 };
+                        f.AddToClassList("nt-vars-input");
+                        f.RegisterCallback<BlurEvent>(_ => CommitDefault(v, f.value));
+                        return f;
                     }
-                    var memberNames = enumDef.Members.Select(m => m.Name).ToList();
-                    int idx = enumDef.Members.FindIndex(m => m.Id == (v.DefaultValue as string));
-                    var dd = new DropdownField(memberNames, Mathf.Max(0, idx));
-                    dd.AddToClassList("nt-vars-input");
-                    dd.RegisterValueChangedCallback(evt =>
+                case VariableType.Float:
                     {
-                        int sel = memberNames.IndexOf(evt.newValue);
-                        if (sel < 0) return;
-                        CommitDefault(v, enumDef.Members[sel].Id);
-                    });
-                    return dd;
-                }
+                        var f = new FloatField { value = v.DefaultValue is float fl ? fl : 0f };
+                        f.AddToClassList("nt-vars-input");
+                        f.RegisterCallback<BlurEvent>(_ => CommitDefault(v, f.value));
+                        return f;
+                    }
+                case VariableType.Bool:
+                    {
+                        var f = new Toggle { value = v.DefaultValue is bool b && b };
+                        f.AddToClassList("nt-vars-input");
+                        f.RegisterValueChangedCallback(evt => CommitDefault(v, evt.newValue));
+                        return f;
+                    }
+                case VariableType.String:
+                    {
+                        var f = new TextField { value = v.DefaultValue as string ?? "" };
+                        f.AddToClassList("nt-vars-input");
+                        f.RegisterCallback<BlurEvent>(_ => CommitDefault(v, f.value));
+                        return f;
+                    }
+                case VariableType.Enum:
+                    {
+                        var enumDef = project.Enums.Find(v.EnumTypeId);
+                        if (enumDef == null || enumDef.Members.Count == 0)
+                        {
+                            var msg = new Label(enumDef == null
+                                ? "(pick an enum first)"
+                                : "(enum has no members)");
+                            msg.AddToClassList("nt-vars-input");
+                            return msg;
+                        }
+                        var memberNames = enumDef.Members.Select(m => m.Name).ToList();
+                        int idx = enumDef.Members.FindIndex(m => m.Id == (v.DefaultValue as string));
+                        var dd = new DropdownField(memberNames, Mathf.Max(0, idx));
+                        dd.AddToClassList("nt-vars-input");
+                        dd.RegisterValueChangedCallback(evt =>
+                        {
+                            int sel = memberNames.IndexOf(evt.newValue);
+                            if (sel < 0) return;
+                            CommitDefault(v, enumDef.Members[sel].Id);
+                        });
+                        return dd;
+                    }
                 default:
                     return new Label("(unsupported type)");
             }
@@ -482,8 +522,6 @@ namespace NarrativeTool.UI.Variables
             row.Add(lbl);
             return row;
         }
-
-        // ───────── Input ─────────
 
         private void OnKeyDown(KeyDownEvent e)
         {
@@ -509,8 +547,7 @@ namespace NarrativeTool.UI.Variables
         }
     }
 
-    // ───────── Context-menu targets ─────────
-
+    // ───────── Context-menu targets (unchanged) ─────────
     public sealed class VariableContextTarget
     {
         public VariablesPanel Panel { get; }
@@ -522,7 +559,7 @@ namespace NarrativeTool.UI.Variables
     public sealed class VariableFolderContextTarget
     {
         public VariablesPanel Panel { get; }
-        public string FolderPath { get; }     // "" for root / empty area
+        public string FolderPath { get; }
         public VariableFolderContextTarget(VariablesPanel panel, string folderPath)
         { Panel = panel; FolderPath = folderPath ?? ""; }
     }

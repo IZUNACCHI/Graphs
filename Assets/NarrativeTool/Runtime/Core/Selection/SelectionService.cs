@@ -15,8 +15,6 @@ namespace NarrativeTool.Core.Selection
     /// Fires SelectionChangedEvent on the EventBus, tagged with the owner
     /// reference so cross-dock consumers can filter.
     ///
-    /// TODO (marquee): consider a short-window merge for SetSelectionCmd so
-    /// a single marquee drag collapses to one undo entry.
     /// TODO (docking): ClearSelectionOnBlur flag on the owning dock.
     /// </summary>
     public sealed class SelectionService
@@ -74,6 +72,14 @@ namespace NarrativeTool.Core.Selection
         {
             if (selected.Count == 0) return;
             PushTransition(new HashSet<ISelectable>());
+        }
+
+        public void SelectSet(IEnumerable<ISelectable> items)
+        {
+            var next = new HashSet<ISelectable>();
+            foreach (var i in items) if (i != null) next.Add(i);
+            if (SetsEqual(next, selected)) return;
+            PushTransition(next);
         }
 
         public List<ISelectable> Snapshot() => new(selected);
