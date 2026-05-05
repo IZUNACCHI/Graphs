@@ -34,8 +34,8 @@ namespace NarrativeTool.Core.Runtime.Executors
                 var first = choice.Options.FirstOrDefault();
                 if (first != null)
                 {
-                    Debug.Log($"[ChoiceExecutor] All options hidden for node {choice.Id}. Falling through to first option.");
-                    return ExecutionResult.Continue(first.PortId);
+                    Debug.Log($"[ChoiceExecutor] All options hidden for node {choice.Id}. .");
+                    return new ExecutionResult(); // end of graph
                 }
                 return new ExecutionResult(); // end of graph
             }

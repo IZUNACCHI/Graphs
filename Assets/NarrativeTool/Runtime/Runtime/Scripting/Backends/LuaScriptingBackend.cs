@@ -42,12 +42,11 @@ namespace NarrativeTool.Core.Scripting
                 return DynValue.Nil;
             });
 
-            // TODO: register entity access when interface is ready
-            // moonScript.Globals["getEntityField"] = (System.Func<string, string, DynValue>)((entityName, fieldName) =>
-            // {
-            //     object val = entities?.GetValue(entityName, fieldName);
-            //     return DynValue.FromObject(moonScript, val);
-            // });
+            moonScript.Globals["getEntityField"] = (System.Func<string, string, DynValue>)((entityName, fieldName) =>
+            {
+            object val = entities?.GetValue(entityName, fieldName);
+            return DynValue.FromObject(moonScript, val);
+            });
 
             // Stub for localization
             moonScript.Globals["loc"] = (System.Func<string, DynValue>)(key =>

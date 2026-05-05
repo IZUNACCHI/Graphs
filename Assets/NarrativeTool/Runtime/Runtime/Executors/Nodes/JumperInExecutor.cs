@@ -14,10 +14,10 @@ namespace NarrativeTool.Core.Runtime.Executors
             if (string.IsNullOrEmpty(jumperIn.TargetOutNodeId))
             {
                 Debug.LogError($"[JumperIn] Node '{node.Id}' has no target Out jumper.");
-                return new ExecutionResult();
+                return new ExecutionResult(); // implicit end
             }
 
-            // Find the Out node in the same graph (for cross graph, we'd need graph scoped lookup)
+            // Find the Out node in the same graph
             var outNode = context.CurrentGraph.Nodes
                 .OfType<JumperOutNodeData>()
                 .FirstOrDefault(n => n.Id == jumperIn.TargetOutNodeId);
@@ -28,7 +28,8 @@ namespace NarrativeTool.Core.Runtime.Executors
                 return new ExecutionResult();
             }
 
-            // Teleport: continue from the Out node's output port
+            // Teleport: set the current node to the Out jumper, then continue from its output
+            context.CurrentNode = outNode;
             return ExecutionResult.Continue(JumperOutNodeData.OutputPortId);
         }
     }

@@ -17,7 +17,7 @@ namespace NarrativeTool.Data.Graph.Nodes
         public JumperOutNodeData(string id, string title, Vector2 position)
             : base(id, title, NodeCategory.Flow, position)
         {
-            Outputs.Add(new PortData(OutputPortId, "", PortDirection.Output, PortCapacity.Multi, "flow"));
+            Outputs.Add(new PortData(OutputPortId, "", PortDirection.Output, PortCapacity.Single, "flow"));
         }
     }
 }
