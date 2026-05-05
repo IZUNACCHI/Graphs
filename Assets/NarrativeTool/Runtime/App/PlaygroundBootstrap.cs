@@ -11,6 +11,7 @@ using NarrativeTool.Data.Graph.Nodes;
 using NarrativeTool.Data.Project;
 using NarrativeTool.Data.Serialization;
 using NarrativeTool.UI;
+using NarrativeTool.UI.Debugger;
 using NarrativeTool.UI.Library;
 using NarrativeTool.UI.Runtime;
 using System;
@@ -37,6 +38,8 @@ namespace NarrativeTool.App
         // ── Runtime ──
         private RuntimeEngine runtimeEngine;
         private RuntimePanel runtimePanel;
+        private DebuggerPanel debuggerPanel;
+        private BreakpointStore breakpointStore;
         private IDisposable runtimeStateSub;
 
         // ── Toolbar controls ──
@@ -61,6 +64,10 @@ namespace NarrativeTool.App
 
             session = new SessionState(bus);
             contextMenu = Services.Get<ContextMenuController>();
+
+            // Single BreakpointStore lives across runs so the user's set is preserved.
+            breakpointStore = new BreakpointStore(bus);
+            Services.Register(breakpointStore);
 
             // Serialization
             SerializerRegistry.Register(new JsonNetSerializer());
@@ -102,6 +109,9 @@ namespace NarrativeTool.App
             contextMenu.RegisterProvider(new EnumFolderContextMenuProvider());
             contextMenu.RegisterProvider(new GraphContextMenuProvider());
             contextMenu.RegisterProvider(new GraphFolderContextMenuProvider());
+            contextMenu.RegisterProvider(new WatchContextMenuProvider());
+            contextMenu.RegisterProvider(new WatchPickerContextMenuProvider());
+            contextMenu.RegisterProvider(new BreakpointContextMenuProvider());
 
             ShowLibrary();
         }
@@ -235,6 +245,12 @@ namespace NarrativeTool.App
             runtimePanel.style.display = DisplayStyle.None;
             split.Add(runtimePanel);
 
+            // Debugger panel (hidden until Play is pressed)
+            debuggerPanel = new DebuggerPanel();
+            debuggerPanel.style.width = 280;
+            debuggerPanel.style.display = DisplayStyle.None;
+            split.Add(debuggerPanel);
+
             // Ctrl+S saves the active tab & project
             split.RegisterCallback<KeyDownEvent>(e =>
             {
@@ -279,9 +295,9 @@ namespace NarrativeTool.App
 
             session.IsPlayMode = true;
 
-            // Create runtime services (use your actual class names)
-            var varService = new RuntimeVariableStore(session.Project);
-            var entityService = new RuntimeEntityStore(session.Project);
+            // Create runtime services 
+            var varService = new RuntimeVariableStore(session.Project, session.Bus);
+            var entityService = new RuntimeEntityStore(session.Project, session.Bus);
             var graphLoader = new ProjectGraphLoader(session.Project);
             // Inside StartRuntime, replace the null scripting backend:
             var luaBackend = new LuaScriptingBackend(varService, entityService);
@@ -289,10 +305,14 @@ namespace NarrativeTool.App
                 luaBackend, varService, entityService);
 
             var executorRegistry = Services.Get<NodeExecutorRegistry>();
-            runtimeEngine = new RuntimeEngine(context, executorRegistry);
+            runtimeEngine = new RuntimeEngine(context, executorRegistry, breakpointStore);
 
             runtimePanel.Bind(runtimeEngine, session.Bus);
             runtimePanel.style.display = DisplayStyle.Flex;
+
+            debuggerPanel.Bind(session.Project, varService, entityService,
+                breakpointStore, session.Bus, contextMenu);
+            debuggerPanel.style.display = DisplayStyle.Flex;
 
             runtimeEngine.Start(graphId);
 
@@ -305,7 +325,7 @@ namespace NarrativeTool.App
                 if (e.NewState == RuntimeState.Idle || e.NewState == RuntimeState.Done)
                 {
                     if (runtimePanel != null) runtimePanel.style.display = DisplayStyle.None;
-                    // Don't change button states here – StopRuntime already did
+                    if (debuggerPanel != null) debuggerPanel.style.display = DisplayStyle.None;
                 }
             });
         }
@@ -316,6 +336,8 @@ namespace NarrativeTool.App
             runtimeEngine?.Stop();
             runtimePanel?.Unbind();
             if (runtimePanel != null) runtimePanel.style.display = DisplayStyle.None;
+            debuggerPanel?.Unbind();
+            if (debuggerPanel != null) debuggerPanel.style.display = DisplayStyle.None;
             runtimeStateSub?.Dispose();
             runtimeStateSub = null;
 

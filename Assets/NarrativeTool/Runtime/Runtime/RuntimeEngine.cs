@@ -1,6 +1,8 @@
 using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
+using NarrativeTool.Runtime;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -10,15 +12,47 @@ namespace NarrativeTool.Core.Runtime
 
     public class RuntimeEngine
     {
+        private const int MaxStepHistory = 200;
+
         private RuntimeContext context;
         private NodeExecutorRegistry executorRegistry;
+        private BreakpointStore breakpoints;
+        private RuntimeVariableStore variableStore;
+        private RuntimeEntityStore entityStore;
+
+        // Set when execution was paused by a breakpoint, so the next Step()
+        // doesn't pause on the same node forever.
+        private bool skipBreakpointOnce;
+
+        // When > 0, the engine pauses after executing this many more node
+        // bodies (used by manual single-step). 0 = run normally.
+        private int stepBudget = -1;  // -1 disabled, 0 = "pause now", >0 = "execute this many more"
+
+        // Stack of state snapshots taken right before each node executed.
+        // Bounded; oldest entries are dropped when MaxStepHistory exceeded.
+        private readonly LinkedList<StepSnapshot> history = new();
 
         public RuntimeState State { get; private set; } = RuntimeState.Idle;
 
-        public RuntimeEngine(RuntimeContext context, NodeExecutorRegistry executorRegistry)
+        public bool CanUndoStep => history.Count > 0;
+
+        public RuntimeEngine(RuntimeContext context, NodeExecutorRegistry executorRegistry,
+            BreakpointStore breakpoints = null)
         {
             this.context = context;
             this.executorRegistry = executorRegistry;
+            this.breakpoints = breakpoints;
+            this.variableStore = context?.Variables as RuntimeVariableStore;
+            this.entityStore = context?.Entities as RuntimeEntityStore;
+        }
+
+        private sealed class StepSnapshot
+        {
+            public GraphData Graph;
+            public NodeData Node;
+            public Dictionary<string, object> Variables;
+            public Dictionary<string, Dictionary<string, object>> Entities;
+            public CallFrame[] CallStackBottomToTop;
         }
 
         /// <summary>
@@ -54,6 +88,8 @@ namespace NarrativeTool.Core.Runtime
                 context.CurrentNode = startNode;
             }
 
+            history.Clear();
+            stepBudget = -1;
             State = RuntimeState.Running;
             PublishStateChange();
             Step();
@@ -64,6 +100,33 @@ namespace NarrativeTool.Core.Runtime
             if (State != RuntimeState.Running) return;
 
             var node = context.CurrentNode;
+
+            // Pause on enabled breakpoint, unless we just resumed from one.
+            if (!skipBreakpointOnce
+                && breakpoints != null
+                && breakpoints.IsActive(context.CurrentGraph.Id, node.Id))
+            {
+                State = RuntimeState.Paused;
+                context.EventBus.Publish(new BreakpointHitEvent(context.CurrentGraph.Id, node.Id));
+                PublishStateChange();
+                return;
+            }
+            skipBreakpointOnce = false;
+
+            // Single-step budget: 0 means "pause before executing the next node".
+            if (stepBudget == 0)
+            {
+                stepBudget = -1;          // step consumed
+                State = RuntimeState.Paused;
+                skipBreakpointOnce = true; // so resume past this node doesn't re-fire its BP
+                PublishStateChange();
+                return;
+            }
+            if (stepBudget > 0) stepBudget--;
+
+            // Snapshot state so the user can undo this step later.
+            CaptureSnapshot();
+
             context.EventBus.Publish(new NodeEnteredEvent(context.CurrentGraph.Id, node.Id));
 
             var executor = executorRegistry.Get(node.TypeId);
@@ -99,6 +162,87 @@ namespace NarrativeTool.Core.Runtime
 
             // Continue to next node
             ContinueExecution(result.NextPortId);
+        }
+
+        /// <summary>
+        /// Resumes execution from a breakpoint pause. Re-runs the current node
+        /// (which was the one that triggered the breakpoint) without pausing
+        /// on it again.
+        /// </summary>
+        public void ResumeFromBreakpoint()
+        {
+            if (State != RuntimeState.Paused) return;
+            if (context.Interaction.IsPending) return;  // not a breakpoint pause
+            skipBreakpointOnce = true;
+            stepBudget = -1;
+            State = RuntimeState.Running;
+            PublishStateChange();
+            Step();
+        }
+
+        /// <summary>
+        /// Manual single-step. When paused (e.g. on a breakpoint), executes
+        /// exactly one node body and pauses again at the next node. Useful
+        /// for walking through a graph one node at a time.
+        /// </summary>
+        public void StepOne()
+        {
+            if (State != RuntimeState.Paused) return;
+            if (context.Interaction.IsPending) return;
+            skipBreakpointOnce = true;
+            stepBudget = 1;
+            State = RuntimeState.Running;
+            PublishStateChange();
+            Step();
+        }
+
+        /// <summary>
+        /// Rewinds one step: pops the last snapshot and restores variable /
+        /// entity values, current node, current graph, and call stack. The
+        /// engine is left in the Paused state so the user can step forward
+        /// again. Does nothing if there is no history.
+        /// </summary>
+        public void UndoLastStep()
+        {
+            if (history.Count == 0) return;
+
+            var snap = history.Last.Value;
+            history.RemoveLast();
+
+            // Restore values (publishes change events so UI reflects the rewind)
+            variableStore?.RestoreValues(snap.Variables);
+            entityStore?.RestoreValues(snap.Entities);
+
+            // Restore graph location & call stack
+            context.CurrentGraph = snap.Graph;
+            context.CurrentNode = snap.Node;
+            context.CallStack.Clear();
+            if (snap.CallStackBottomToTop != null)
+                foreach (var frame in snap.CallStackBottomToTop)
+                    context.CallStack.Push(frame);
+
+            // Land in Paused with a guard so the immediate next step doesn't
+            // re-trigger a breakpoint on this node.
+            skipBreakpointOnce = true;
+            stepBudget = -1;
+            State = RuntimeState.Paused;
+            PublishStateChange();
+        }
+
+        private void CaptureSnapshot()
+        {
+            var snap = new StepSnapshot
+            {
+                Graph = context.CurrentGraph,
+                Node = context.CurrentNode,
+                Variables = variableStore?.SnapshotValues(),
+                Entities = entityStore?.SnapshotValues(),
+                CallStackBottomToTop = context.CallStack.Count == 0
+                    ? null
+                    : context.CallStack.Reverse().ToArray(),
+            };
+            history.AddLast(snap);
+            while (history.Count > MaxStepHistory) history.RemoveFirst();
         }
 
         /// <summary>
@@ -181,6 +325,9 @@ namespace NarrativeTool.Core.Runtime
         {
             State = RuntimeState.Idle;
             context.Interaction.Clear();
+            history.Clear();
+            stepBudget = -1;
+            skipBreakpointOnce = false;
             PublishStateChange();
         }
 

@@ -4,7 +4,9 @@ namespace NarrativeTool.Data.Graph
 {
     public sealed class GraphData
     {
-        public string Id { get; private set; }
+        // Public setter so Newtonsoft.Json (and the GraphTab fallback below)
+        // can populate Id on deserialised graphs that lost it.
+        public string Id { get; set; }
         public string Name { get; set; }
 
         public List<NodeData> Nodes { get; } = new();

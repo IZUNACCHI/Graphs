@@ -15,7 +15,12 @@ namespace NarrativeTool.Core.Runtime
         public GraphData GetGraph(string graphId)
         {
             var lazy = project.Graphs.Items.FirstOrDefault(g => g.Id == graphId);
-            return lazy?.GetGraph();
+            var graph = lazy?.GetGraph();
+            // Fallback: GraphData.Id may not survive JSON deserialisation;
+            // LazyGraph.Id is the authoritative reference.
+            if (graph != null && lazy != null && string.IsNullOrEmpty(graph.Id))
+                graph.Id = lazy.Id;
+            return graph;
         }
     }
 }

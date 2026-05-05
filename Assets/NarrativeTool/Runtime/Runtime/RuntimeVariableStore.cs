@@ -1,3 +1,4 @@
+using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Data.Project;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,14 +13,18 @@ namespace NarrativeTool.Core.Runtime
     public class RuntimeVariableStore : IVariableAccess
     {
         private readonly ProjectModel project;
+        private readonly EventBus bus;
         private readonly Dictionary<string, object> currentValues = new();
         private readonly Dictionary<string, VariableDefinition> definitions = new();
 
-        public RuntimeVariableStore(ProjectModel project)
+        public RuntimeVariableStore(ProjectModel project, EventBus bus = null)
         {
             this.project = project;
+            this.bus = bus;
             InitialiseFromDefinitions();
         }
+
+        public IReadOnlyDictionary<string, VariableDefinition> Definitions => definitions;
 
         /// <summary>
         /// Reads all variable definitions from the project's FolderTreeStore and
@@ -57,10 +62,11 @@ namespace NarrativeTool.Core.Runtime
 
         public void SetValue(string name, object value)
         {
-            if (currentValues.ContainsKey(name))
+            if (currentValues.TryGetValue(name, out var oldValue))
             {
                 currentValues[name] = value;
-                // Optionally publish VariableChangedEvent here or let the caller do it
+                if (!Equals(oldValue, value))
+                    bus?.Publish(new VariableRuntimeValueChangedEvent(name, oldValue, value));
             }
             else
             {
@@ -73,5 +79,25 @@ namespace NarrativeTool.Core.Runtime
         /// </summary>
         public VariableDefinition GetDefinition(string name) =>
             definitions.TryGetValue(name, out var def) ? def : null;
+
+        /// <summary>Snapshot the entire current-values dictionary (shallow copy of boxed values).</summary>
+        public Dictionary<string, object> SnapshotValues() => new(currentValues);
+
+        /// <summary>
+        /// Replace current values from a snapshot. Publishes one
+        /// <see cref="VariableRuntimeValueChangedEvent"/> per variable that
+        /// actually changed (used by Undo Step so the Watch panel updates).
+        /// </summary>
+        public void RestoreValues(IReadOnlyDictionary<string, object> snapshot)
+        {
+            if (snapshot == null) return;
+            foreach (var kv in snapshot)
+            {
+                if (!currentValues.TryGetValue(kv.Key, out var oldValue)) continue;
+                if (Equals(oldValue, kv.Value)) continue;
+                currentValues[kv.Key] = kv.Value;
+                bus?.Publish(new VariableRuntimeValueChangedEvent(kv.Key, oldValue, kv.Value));
+            }
+        }
     }
 }

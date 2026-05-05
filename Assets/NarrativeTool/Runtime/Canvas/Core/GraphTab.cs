@@ -23,6 +23,9 @@ namespace NarrativeTool.Canvas.Core
             this.contextMenu = contextMenu;
 
             Graph = lazy.GetGraph();
+            // GraphData.Id may not survive JSON deserialisation in older
+            // saves; LazyGraph.Id is the authoritative reference.
+            if (Graph != null && string.IsNullOrEmpty(Graph.Id)) Graph.Id = lazy.Id;
             View = new GraphView();
             View.Bind(Graph, session, contextMenu);
 

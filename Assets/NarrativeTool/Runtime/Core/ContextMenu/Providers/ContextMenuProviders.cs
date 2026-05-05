@@ -2,6 +2,7 @@ using NarrativeTool.Canvas;
 using NarrativeTool.Canvas.Manipulators;
 using NarrativeTool.Canvas.Views;
 using NarrativeTool.Core.Commands;
+using NarrativeTool.Core.Runtime;
 using NarrativeTool.Core.Utilities.Math;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Graph.Nodes;
@@ -88,6 +89,25 @@ namespace NarrativeTool.Core.ContextMenu
                 items.Insert(0, ContextMenuItem.Of(
                    choiceData.HasPreamble ? "Hide Preamble" : "Show Preamble",
                     () => TogglePreamble(choiceData, choiceView)));
+            }
+
+            // Breakpoint toggle. BreakpointStore is a singleton service; if it
+            // isn't registered (legacy bootstrap), the items are simply omitted.
+            var breakpoints = Services.TryGet<BreakpointStore>();
+            if (breakpoints != null)
+            {
+                string graphId = canvas?.Graph?.Id;
+                string nodeId = nv?.Node?.Id;
+                if (!string.IsNullOrEmpty(graphId) && !string.IsNullOrEmpty(nodeId))
+                {
+                    items.Add(ContextMenuItem.Separator());
+                    if (breakpoints.Has(graphId, nodeId))
+                        items.Add(ContextMenuItem.Of("Remove breakpoint",
+                            () => breakpoints.Remove(graphId, nodeId)));
+                    else
+                        items.Add(ContextMenuItem.Of("Add breakpoint",
+                            () => breakpoints.Add(graphId, nodeId)));
+                }
             }
 
             return items;

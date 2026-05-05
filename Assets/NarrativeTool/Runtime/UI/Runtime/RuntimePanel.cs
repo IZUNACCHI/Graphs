@@ -27,7 +27,7 @@ namespace NarrativeTool.UI.Runtime
         private Label choicesLabel;
         private Label footerInfo;
 
-        private Button btnPlay, btnPause, btnStop, btnStep;
+        private Button btnPlay, btnPause, btnStop, btnStep, btnUndoStep;
         private DropdownField speedDropdown;
 
         public RuntimePanel()
@@ -50,20 +50,27 @@ namespace NarrativeTool.UI.Runtime
             var controls = new VisualElement();
             controls.AddToClassList("runtime-panel__controls");
 
-            btnStep = new Button(() => engine?.Step()) { text = "⟩" };
+            btnUndoStep = new Button(() => engine?.UndoLastStep()) { text = "<" };
+            btnUndoStep.AddToClassList("runtime-panel__ctrl-btn");
+            btnUndoStep.tooltip = "Undo last step (rewind)";
+            controls.Add(btnUndoStep);
+
+            btnStep = new Button(OnStepClicked) { text = ">" };
             btnStep.AddToClassList("runtime-panel__ctrl-btn");
+            btnStep.tooltip = "Step one node (when paused)";
             controls.Add(btnStep);
 
-            btnPlay = new Button(() => engine?.Start(null)) { text = "▶" };
+            btnPlay = new Button(OnPlayClicked) { text = "Play" };
             btnPlay.AddToClassList("runtime-panel__ctrl-btn");
             btnPlay.AddToClassList("runtime-panel__ctrl-btn--primary");
+            btnPlay.tooltip = "Resume / start";
             controls.Add(btnPlay);
 
-            btnPause = new Button(() => engine?.Stop()) { text = "⏸" };
+            btnPause = new Button(() => engine?.Stop()) { text = "||" };
             btnPause.AddToClassList("runtime-panel__ctrl-btn");
             controls.Add(btnPause);
 
-            btnStop = new Button(() => engine?.Stop()) { text = "■" };
+            btnStop = new Button(() => engine?.Stop()) { text = "STOP" };
             btnStop.AddToClassList("runtime-panel__ctrl-btn");
             controls.Add(btnStop);
 
@@ -219,16 +226,37 @@ namespace NarrativeTool.UI.Runtime
             engine?.ContinueAfterInteraction();
         }
 
+        private void OnPlayClicked()
+        {
+            if (engine == null) return;
+            // When paused on a breakpoint (no pending interaction) the Play
+            // button resumes execution. Otherwise it starts a fresh run.
+            if (engine.State == RuntimeState.Paused && !engine.GetContext().Interaction.IsPending)
+                engine.ResumeFromBreakpoint();
+            else
+                engine.Start(null);
+        }
+
+        private void OnStepClicked()
+        {
+            if (engine == null) return;
+            // Manual step is only meaningful when paused; in any other state
+            // the engine ignores the call.
+            engine.StepOne();
+        }
+
         private void OnStateChanged(RuntimeStateChanged e)
         {
             bool running = e.NewState == RuntimeState.Running;
             bool paused = e.NewState == RuntimeState.Paused;
             bool idle = e.NewState == RuntimeState.Idle || e.NewState == RuntimeState.Done;
+            bool pausedOnBreakpoint = paused && engine != null && !engine.GetContext().Interaction.IsPending;
 
-            btnPlay.SetEnabled(!running && !paused);
+            btnPlay.SetEnabled(!running);                    // can resume from paused
             btnPause.SetEnabled(running || paused);
             btnStop.SetEnabled(running || paused);
-            btnStep.SetEnabled(paused);
+            btnStep.SetEnabled(pausedOnBreakpoint);          // step only past BP, not past interaction
+            btnUndoStep.SetEnabled(paused && engine != null && engine.CanUndoStep);
 
             if (idle)
             {
