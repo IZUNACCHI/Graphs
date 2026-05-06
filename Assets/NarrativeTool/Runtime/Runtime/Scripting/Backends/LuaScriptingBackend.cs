@@ -29,7 +29,20 @@ namespace NarrativeTool.Core.Scripting
         {
             moonScript = new Script();
 
-            // --- Register get/set for variables ---
+            // ── Safeties ──
+
+            // TODO: Limit instructions
+
+
+            // Remove any potential dangerous globals (they are nil by default, but explicit)
+            moonScript.Globals["os"] = DynValue.Nil;
+            moonScript.Globals["io"] = DynValue.Nil;
+            moonScript.Globals["dofile"] = DynValue.Nil;
+            moonScript.Globals["loadfile"] = DynValue.Nil;
+            moonScript.Globals["require"] = DynValue.Nil;
+
+            // ── Usable functions ──
+
             moonScript.Globals["getVar"] = (System.Func<string, DynValue>)(name =>
             {
                 object val = variables.GetValue(name);
@@ -40,12 +53,6 @@ namespace NarrativeTool.Core.Scripting
             {
                 variables.SetValue(name, value.ToObject());
                 return DynValue.Nil;
-            });
-
-            moonScript.Globals["getEntityField"] = (System.Func<string, string, DynValue>)((entityName, fieldName) =>
-            {
-            object val = entities?.GetValue(entityName, fieldName);
-            return DynValue.FromObject(moonScript, val);
             });
 
             // Stub for localization

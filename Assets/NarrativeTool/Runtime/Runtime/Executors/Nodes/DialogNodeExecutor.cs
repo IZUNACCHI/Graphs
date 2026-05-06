@@ -10,8 +10,9 @@ namespace NarrativeTool.Core.Runtime.Executors
         public ExecutionResult Execute(NodeData node, RuntimeContext context)
         {
             var dlg = (DialogNodeData)node;
-            // Publish the dialogue line immediately
-            context.EventBus.Publish(new DialogueLineEvent(dlg.Id, dlg.Speaker, dlg.Dialogue, dlg.StageDirections));
+            // Interpolate variables before publishing
+            string text = context.Interpolate(dlg.Dialogue);
+            context.EventBus.Publish(new DialogueLineEvent(dlg.Id, dlg.Speaker, text, dlg.StageDirections));
 
             // Request a continue interaction
             var interaction = new ContinueInteraction("Click to continue", DialogNodeData.OutputPortId);

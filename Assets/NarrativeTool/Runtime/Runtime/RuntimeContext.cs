@@ -1,4 +1,4 @@
-using NarrativeTool.Core.EventSystem;
+﻿using NarrativeTool.Core.EventSystem;
 using NarrativeTool.Core.Scripting;
 using NarrativeTool.Data.Graph;
 using NarrativeTool.Data.Project;
@@ -40,6 +40,34 @@ namespace NarrativeTool.Core.Runtime
             if (string.IsNullOrEmpty(script)) return true;   // empty = always pass
             bool success = Scripting.Evaluate(script, out object result);
             return success && result is true;
+        }
+
+        /// <summary>
+        /// Replaces {{variableName}} or {{Entity.Field}} patterns with the current
+        /// runtime value. Single‑brace {text} is left unchanged.
+        /// </summary>
+        public string Interpolate(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            return System.Text.RegularExpressions.Regex.Replace(
+                text,
+                @"\{\{(.+?)\}\}",
+                match =>
+                {
+                    string expression = match.Groups[1].Value.Trim();
+                    // Try entity.field first (dot notation)
+                    int dotIndex = expression.IndexOf('.');
+                    if (dotIndex > 0)
+                    {
+                        string entityName = expression.Substring(0, dotIndex);
+                        string fieldName = expression.Substring(dotIndex + 1);
+                        object val = Entities?.GetValue(entityName, fieldName);
+                        return val != null ? val.ToString() : $"???{expression}???";
+                    }
+                    // Otherwise treat as a variable name
+                    object varVal = Variables.GetValue(expression);
+                    return varVal != null ? varVal.ToString() : $"???{expression}???";
+                });
         }
     }
 }
