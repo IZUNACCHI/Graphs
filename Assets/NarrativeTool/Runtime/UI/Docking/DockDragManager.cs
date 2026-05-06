@@ -121,10 +121,13 @@ namespace NarrativeTool.UI.Docking
 
         /// <summary>
         /// Walks the ancestor chain of <paramref name="target"/> looking for a
-        /// Tab whose header subtree contains the click. Returns true and fills
-        /// <paramref name="tab"/> / <paramref name="area"/> / <paramref name="panel"/>
-        /// only when the click was on a tab header (not on panel content,
-        /// canvas, dock splitter, etc.).
+        /// Tab. Returns true (with <paramref name="tab"/> / <paramref name="area"/>
+        /// / <paramref name="panel"/> filled) iff the click landed on a
+        /// tab-internal element that is NOT inside the Tab's content container —
+        /// in practice that means the header strip. We use the structural check
+        /// (<see cref="VisualElement.contentContainer"/>) instead of USS class
+        /// names because the latter vary across Unity 6 patches and have already
+        /// burned us once.
         /// </summary>
         private bool FindTabHeaderClick(VisualElement target,
             out Tab tab, out DockArea area, out IDockablePanel panel)
@@ -132,41 +135,40 @@ namespace NarrativeTool.UI.Docking
             tab = null; area = null; panel = null;
             if (target == null) return false;
 
-            // Walk ancestors. The header is somewhere between target and the
-            // owning Tab. Be permissive about the exact class name — Unity has
-            // shipped variations across patches.
-            bool inHeader = false;
+            // Pass 1: find the enclosing Tab (if any).
             VisualElement cur = target;
             int depth = 0;
-            while (cur != null && depth < 50)
+            while (cur != null && depth < 100)
             {
-                if (LooksLikeTabHeader(cur)) inHeader = true;
-                if (cur is Tab t)
-                {
-                    tab = t;
-                    break;
-                }
+                if (cur is Tab t) { tab = t; break; }
                 cur = cur.parent;
                 depth++;
             }
-            if (tab == null || !inHeader) return false;
+            if (tab == null) return false;
+
+            // Pass 2: check whether the click went through the Tab's
+            // contentContainer on its way up. If so it's a click on panel
+            // content (Variables row, canvas, etc.) — NOT the header strip.
+            // contentContainer is public API, so this works regardless of
+            // any USS class-name churn between Unity 6 patches.
+            var content = tab.contentContainer;
+            if (content != null && content != tab)
+            {
+                var c = target;
+                while (c != null && c != tab)
+                {
+                    if (c == content) return false; // content click → skip
+                    c = c.parent;
+                }
+            }
+
             if (!(tab.userData is IDockablePanel p)) return false;
 
-            // Find the DockArea that owns this panel.
             foreach (var z in root.AllZones())
             {
                 var a = z.FindAreaContaining(p.Id);
                 if (a != null) { area = a; panel = p; return true; }
             }
-            return false;
-        }
-
-        private static bool LooksLikeTabHeader(VisualElement el)
-        {
-            // Cheap class-list scan for any header-like name.
-            if (el.ClassListContains("unity-tab__header")) return true;
-            if (el.ClassListContains("unity-tab__header-label")) return true;
-            if (el.name == "tab-header") return true;
             return false;
         }
 
