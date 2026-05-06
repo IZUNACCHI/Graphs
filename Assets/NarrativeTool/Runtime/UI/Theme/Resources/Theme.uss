@@ -2152,15 +2152,60 @@
 .nt-dock-area {
     flex-grow: 1;
 }
+/* Match the old graph-tab look (`.nt-tab-btn`) on top of native TabView. */
 .nt-dock-area > .unity-tab-view__header-container {
-    background-color: rgb(22,22,22);
+    background-color: #181818;
     border-bottom-width: 1px;
-    border-bottom-color: rgb(42,42,42);
-    height: 26px;
+    border-bottom-color: #2a2a2a;
+    padding-left: 4px;
+    padding-top: 2px;
+    flex-shrink: 0;
+    min-height: 22px;
+}
+.nt-dock-area .unity-tab__header {
+    background-color: #242424;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: #3a3a3a;
+    border-right-color: #3a3a3a;
+    border-top-color: #3a3a3a;
+    border-bottom-color: #2a2a2a;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    color: #999;
+    font-size: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin-right: 2px;
+    -unity-text-align: middle-center;
+}
+.nt-dock-area .unity-tab__header:hover {
+    background-color: #303030;
+    border-left-color: #505050;
+    border-right-color: #505050;
+    border-top-color: #505050;
+    border-bottom-color: #404040;
+    color: #ccc;
+}
+.nt-dock-area .unity-tab__header--selected {
+    background-color: #1e1e1e;
+    border-bottom-color: #1e1e1e;
+    color: #c8c8c8;
+}
+.nt-dock-area .unity-tab__header-label {
+    color: inherit;
+    font-size: 10px;
+}
+/* Content area background flush with the active tab. */
+.nt-dock-area > .unity-tab-view__content-container {
+    background-color: #1e1e1e;
 }
 .nt-dock-tab {
-    color: rgb(170,170,170);
-    font-size: 11px;
+    flex-grow: 1;
 }
 .nt-dock-split {
     flex-grow: 1;

@@ -28,6 +28,13 @@ namespace NarrativeTool.UI.Docking
         public event Action<DockArea, Tab, IDockablePanel> TabAdded;
         internal void RaiseTabAdded(DockArea a, Tab t, IDockablePanel p) => TabAdded?.Invoke(a, t, p);
 
+        // Side-zone splitters are kept around so we can collapse / uncollapse a
+        // whole zone when it becomes empty (or refilled). Each non-center zone is
+        // the *collapsible* pane of exactly one of these splitters.
+        private readonly TwoPaneSplitView outerSplit;     // pane 0 = Left
+        private readonly TwoPaneSplitView midRowSplit;    // pane 1 = Right
+        private readonly TwoPaneSplitView centerColSplit; // pane 1 = Bottom
+
         public DockRoot()
         {
             AddToClassList("nt-dock-root");
@@ -40,27 +47,74 @@ namespace NarrativeTool.UI.Docking
             Center = new DockZone(DockZoneKind.Center) { Owner = this };
 
             // center column (center top + bottom).
-            var centerCol = new TwoPaneSplitView(1, 200f, TwoPaneSplitViewOrientation.Vertical);
-            centerCol.AddToClassList("nt-dock-root__center-col");
-            centerCol.style.flexGrow = 1;
-            centerCol.Add(Center);
-            centerCol.Add(Bottom);
+            centerColSplit = new TwoPaneSplitView(1, 200f, TwoPaneSplitViewOrientation.Vertical);
+            centerColSplit.AddToClassList("nt-dock-root__center-col");
+            centerColSplit.style.flexGrow = 1;
+            centerColSplit.Add(Center);
+            centerColSplit.Add(Bottom);
 
             // middle row (center column + right zone)
-            var midRow = new TwoPaneSplitView(1, 280f, TwoPaneSplitViewOrientation.Horizontal);
-            midRow.AddToClassList("nt-dock-root__mid-row");
-            midRow.style.flexGrow = 1;
-            midRow.Add(centerCol);
-            midRow.Add(Right);
+            midRowSplit = new TwoPaneSplitView(1, 280f, TwoPaneSplitViewOrientation.Horizontal);
+            midRowSplit.AddToClassList("nt-dock-root__mid-row");
+            midRowSplit.style.flexGrow = 1;
+            midRowSplit.Add(centerColSplit);
+            midRowSplit.Add(Right);
 
             // outer row (left + middle row)
-            var outer = new TwoPaneSplitView(0, 200f, TwoPaneSplitViewOrientation.Horizontal);
-            outer.AddToClassList("nt-dock-root__outer");
-            outer.style.flexGrow = 1;
-            outer.Add(Left);
-            outer.Add(midRow);
+            outerSplit = new TwoPaneSplitView(0, 200f, TwoPaneSplitViewOrientation.Horizontal);
+            outerSplit.AddToClassList("nt-dock-root__outer");
+            outerSplit.style.flexGrow = 1;
+            outerSplit.Add(Left);
+            outerSplit.Add(midRowSplit);
 
-            Add(outer);
+            Add(outerSplit);
+
+            // First zone-visibility pass once layout has measured (resolved
+            // styles aren't available synchronously in the constructor).
+            schedule.Execute(RefreshZoneVisibility).ExecuteLater(0);
+
+            // TwoPaneSplitView's USS sets a named OS resize-cursor on its
+            // drag-line anchors; the runtime panel can only render cursor
+            // *textures* and spams "Runtime cursors other than the default
+            // cursor need to be defined using a texture" every frame
+            // (UpdatePanels). Override the inline style to suppress.
+            schedule.Execute(SuppressDragLineCursors).ExecuteLater(0);
+        }
+
+        private void SuppressDragLineCursors()
+        {
+            foreach (var anchor in this.Query(className: "unity-two-pane-split-view__dragline-anchor").ToList())
+                anchor.style.cursor = new StyleCursor(StyleKeyword.None);
+        }
+
+        // ─────────────────────────── Zone visibility ───────────────────────────
+
+        /// <summary>
+        /// Collapses any side zone (Left / Right / Bottom) that has no panels and
+        /// uncollapses it again once panels return. Center zone is never collapsed.
+        /// Call after any structural mutation (open / close / move / load).
+        /// </summary>
+        public void RefreshZoneVisibility()
+        {
+            SetCollapsed(outerSplit,     0, IsZoneEmpty(Left));
+            SetCollapsed(midRowSplit,    1, IsZoneEmpty(Right));
+            SetCollapsed(centerColSplit, 1, IsZoneEmpty(Bottom));
+        }
+
+        private static void SetCollapsed(TwoPaneSplitView split, int paneIdx, bool collapse)
+        {
+            if (split == null) return;
+            if (collapse) split.CollapseChild(paneIdx);
+            else          split.UnCollapse();
+        }
+
+        private static bool IsZoneEmpty(DockZone zone)
+        {
+            if (zone == null) return true;
+            if (zone.Root == null) return false;       // custom-content zone (Center) is never empty
+            foreach (var area in zone.AllAreas())
+                if (!area.IsEmpty) return false;
+            return true;
         }
 
         public DockZone GetZone(DockZoneKind kind) => kind switch
@@ -87,7 +141,9 @@ namespace NarrativeTool.UI.Docking
         {
             if (panel == null) return null;
             var z = zone ?? (panel.IsPinnedCenter ? DockZoneKind.Center : DockZoneKind.Left);
-            return GetZone(z).AddPanel(panel);
+            var area = GetZone(z).AddPanel(panel);
+            RefreshZoneVisibility();
+            return area;
         }
 
         /// <summary>Removes a panel by id from whatever area currently holds it.</summary>
@@ -99,6 +155,7 @@ namespace NarrativeTool.UI.Docking
                 if (area == null) continue;
                 var p = area.DetachPanel(id);
                 if (area.IsEmpty) zone.CollapseArea(area);
+                RefreshZoneVisibility();
                 return p;
             }
             return null;
@@ -158,6 +215,7 @@ namespace NarrativeTool.UI.Docking
 
             // Collapse the source area if it became empty.
             if (sourceArea.IsEmpty) sourceArea.Zone?.CollapseArea(sourceArea);
+            RefreshZoneVisibility();
             return true;
         }
     }
