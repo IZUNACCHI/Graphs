@@ -17,8 +17,7 @@ namespace NarrativeTool.UI.Debugger
         private const int MaxEntries = 1000;
 
         private readonly EventBus bus;
-        private readonly VisualElement listContainer;
-        private readonly ScrollView scroll;
+        private readonly ListView listView;
         private readonly Label footerSummary;
 
         private readonly List<LogEntry> entries = new();
@@ -43,12 +42,20 @@ namespace NarrativeTool.UI.Debugger
             header.Add(MakeHeaderCell("TYPE", width: 52));
             Add(header);
 
-            scroll = new ScrollView();
-            scroll.style.flexGrow = 1;
-            listContainer = new VisualElement();
-            listContainer.style.flexDirection = FlexDirection.Column;
-            scroll.Add(listContainer);
-            Add(scroll);
+            // Native, virtualised list (Phase 3 — replaces hand-rolled ScrollView).
+            listView = new ListView
+            {
+                itemsSource = entries,
+                fixedItemHeight = 22,
+                makeItem = MakeRow,
+                bindItem = BindRow,
+                selectionType = SelectionType.None,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.None,
+                showBorder = false,
+                reorderable = false,
+            };
+            listView.style.flexGrow = 1;
+            Add(listView);
 
             // Footer with Clear button
             var footer = new VisualElement();
@@ -91,7 +98,7 @@ namespace NarrativeTool.UI.Debugger
         {
             entries.Clear();
             stepCounter = 0;
-            listContainer.Clear();
+            listView.RefreshItems();
             UpdateFooter();
         }
 
@@ -191,15 +198,11 @@ namespace NarrativeTool.UI.Debugger
             {
                 int drop = entries.Count - MaxEntries;
                 entries.RemoveRange(0, drop);
-                listContainer.Clear();
-                foreach (var en in entries) listContainer.Add(BuildRow(en));
             }
-            else
-            {
-                listContainer.Add(BuildRow(entry));
-            }
+            listView.RefreshItems();
             UpdateFooter();
-            scroll.scrollOffset = new Vector2(0, float.MaxValue);
+            // Auto-scroll to the newest entry.
+            listView.ScrollToItem(entries.Count - 1);
         }
 
         private void UpdateFooter()
@@ -207,43 +210,74 @@ namespace NarrativeTool.UI.Debugger
             footerSummary.text = $"{entries.Count} steps";
         }
 
-        private static VisualElement BuildRow(LogEntry e)
+        // ListView builds rows via makeItem (one VisualElement reused per slot)
+        // and updates them via bindItem when the slot is bound to an entry index.
+        private static VisualElement MakeRow()
         {
             var row = new VisualElement();
             row.AddToClassList("debugger-row");
-            if (e.Type == LogEntryType.BreakpointHit)
-                row.AddToClassList("debugger-log__row--active");
 
-            var time = new Label($"{e.TimeSeconds:0.0}s");
+            var time = new Label();
             time.AddToClassList("debugger-log__timestamp");
+            time.name = "time";
             row.Add(time);
 
-            var step = new Label($"#{e.Step}");
+            var step = new Label();
             step.AddToClassList("debugger-log__step");
+            step.name = "step";
             row.Add(step);
 
             var nodeWrap = new VisualElement();
             nodeWrap.AddToClassList("debugger-log__node-label");
-            if (e.Type == LogEntryType.BreakpointHit)
-            {
-                var dot = new VisualElement();
-                dot.AddToClassList("debugger-log__active-dot");
-                nodeWrap.Add(dot);
-            }
-            var nodeName = new Label(e.NodeId);
+            nodeWrap.name = "node-wrap";
+            var dot = new VisualElement();
+            dot.AddToClassList("debugger-log__active-dot");
+            dot.name = "active-dot";
+            nodeWrap.Add(dot);
+            var nodeName = new Label();
             nodeName.AddToClassList("debugger-log__node-name");
-            if (e.Type == LogEntryType.BreakpointHit)
-                nodeName.AddToClassList("debugger-log__node-name--active");
-            nodeName.tooltip = e.Description;
+            nodeName.name = "node-name";
             nodeWrap.Add(nodeName);
             row.Add(nodeWrap);
 
-            var badge = new Label(TypeBadge(e.Type));
+            var badge = new Label();
             badge.AddToClassList("debugger-log__type-badge");
-            badge.AddToClassList(TypeBadgeClass(e.Type));
+            badge.name = "badge";
             row.Add(badge);
 
             return row;
+        }
+
+        private void BindRow(VisualElement row, int index)
+        {
+            if (index < 0 || index >= entries.Count) return;
+            var e = entries[index];
+            bool isBp = e.Type == LogEntryType.BreakpointHit;
+
+            row.EnableInClassList("debugger-log__row--active", isBp);
+
+            var time = row.Q<Label>("time");
+            time.text = $"{e.TimeSeconds:0.0}s";
+
+            var step = row.Q<Label>("step");
+            step.text = $"#{e.Step}";
+
+            var dot = row.Q<VisualElement>("active-dot");
+            dot.style.display = isBp ? DisplayStyle.Flex : DisplayStyle.None;
+
+            var nodeName = row.Q<Label>("node-name");
+            nodeName.text = e.NodeId;
+            nodeName.tooltip = e.Description;
+            nodeName.EnableInClassList("debugger-log__node-name--active", isBp);
+
+            var badge = row.Q<Label>("badge");
+            badge.text = TypeBadge(e.Type);
+            // Reset badge variant classes before adding the right one.
+            badge.RemoveFromClassList("debugger-log__type-badge--choice");
+            badge.RemoveFromClassList("debugger-log__type-badge--dialogue");
+            badge.RemoveFromClassList("debugger-log__type-badge--setvar");
+            badge.RemoveFromClassList("debugger-log__type-badge--default");
+            badge.AddToClassList(TypeBadgeClass(e.Type));
         }
 
         private static string TypeBadge(LogEntryType t) => t switch
