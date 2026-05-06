@@ -72,7 +72,10 @@ namespace NarrativeTool.UI.MenuBar
                     dd.AddSeparator(string.Empty);
             }
 
-            dd.DropDown(anchor.worldBound, anchor);
+            // The third argument disambiguates between the two DropDown overloads
+            // (Unity 6 added a 4-arg variant). false = use the anchor's bottom-left
+            // as the menu's top-left, matching native menu-bar behaviour.
+            dd.DropDown(anchor.worldBound, anchor, anchored: false);
         }
     }
 }
