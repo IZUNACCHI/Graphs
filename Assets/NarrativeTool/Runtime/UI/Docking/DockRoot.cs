@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UIElements;
+// Disambiguate: both UnityEngine and UnityEngine.UIElements define Cursor.
+using UICursor = UnityEngine.UIElements.Cursor;
 
 namespace NarrativeTool.UI.Docking
 {
@@ -74,17 +77,41 @@ namespace NarrativeTool.UI.Docking
             schedule.Execute(RefreshZoneVisibility).ExecuteLater(0);
 
             // TwoPaneSplitView's USS sets a named OS resize-cursor on its
-            // drag-line anchors; the runtime panel can only render cursor
+            // drag-line anchors; the runtime panel only renders cursor
             // *textures* and spams "Runtime cursors other than the default
             // cursor need to be defined using a texture" every frame
-            // (UpdatePanels). Override the inline style to suppress.
+            // (UpdatePanels). StyleKeyword.None doesn't satisfy the validator
+            // — we have to provide an actual Texture2D. Re-applied a few
+            // frames later in case the dragline-anchor children are created
+            // lazily after first layout.
             schedule.Execute(SuppressDragLineCursors).ExecuteLater(0);
+            schedule.Execute(SuppressDragLineCursors).ExecuteLater(100);
+            schedule.Execute(SuppressDragLineCursors).ExecuteLater(500);
+        }
+
+        // 1×1 transparent cursor texture, shared. Setting any element's cursor
+        // to this is enough for the runtime panel to consider it a "valid
+        // texture cursor" and stop logging the warning. Visual cost: cursor
+        // disappears for a few px when hovering the dragline (acceptable —
+        // resize affordance is still discoverable by the visible drag-bar).
+        private static Texture2D s_transparentCursorTex;
+        private static Texture2D GetTransparentCursorTex()
+        {
+            if (s_transparentCursorTex == null)
+            {
+                s_transparentCursorTex = new Texture2D(1, 1, TextureFormat.RGBA32, mipChain: false);
+                s_transparentCursorTex.SetPixel(0, 0, new Color(0, 0, 0, 0));
+                s_transparentCursorTex.Apply();
+                s_transparentCursorTex.hideFlags = HideFlags.HideAndDontSave;
+            }
+            return s_transparentCursorTex;
         }
 
         private void SuppressDragLineCursors()
         {
+            var cursor = new UICursor { texture = GetTransparentCursorTex(), hotspot = Vector2.zero };
             foreach (var anchor in this.Query(className: "unity-two-pane-split-view__dragline-anchor").ToList())
-                anchor.style.cursor = new StyleCursor(StyleKeyword.None);
+                anchor.style.cursor = new StyleCursor(cursor);
         }
 
         // ─────────────────────────── Zone visibility ───────────────────────────
@@ -99,6 +126,8 @@ namespace NarrativeTool.UI.Docking
             SetCollapsed(outerSplit,     0, IsZoneEmpty(Left));
             SetCollapsed(midRowSplit,    1, IsZoneEmpty(Right));
             SetCollapsed(centerColSplit, 1, IsZoneEmpty(Bottom));
+            // Collapse/Uncollapse can rebuild dragline-anchor children — re-apply.
+            SuppressDragLineCursors();
         }
 
         private static void SetCollapsed(TwoPaneSplitView split, int paneIdx, bool collapse)

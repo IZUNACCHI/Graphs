@@ -5,8 +5,22 @@ namespace NarrativeTool.UI.Docking
 {
     /// <summary>
     /// Detects tab-header drags and turns them into structural moves on
-    /// <see cref="DockRoot"/>. Subscribes to <see cref="DockRoot.TabAdded"/> so
-    /// pointer handlers are wired even on tabs born from a split operation.
+    /// <see cref="DockRoot"/>.
+    /// <para>
+    /// Single global handler at the root, registered with <see cref="TrickleDown.TrickleDown"/>
+    /// so we observe every <see cref="PointerDownEvent"/> before any descendant
+    /// can call StopPropagation. We then walk the event target's ancestor chain
+    /// to decide if the click was inside a Tab's header element. Clicks inside
+    /// panel content (a row in Variables, the canvas, etc.) are ignored — no
+    /// pointer capture is taken, so panel UI isn't blocked.
+    /// </para>
+    /// <para>
+    /// Pointer capture is taken on the root <i>only after</i> the user crosses
+    /// the drag threshold. That way simple clicks select the tab via the
+    /// TabView's own logic and never freeze the UI; once the user is committed
+    /// to a drag we capture so move/up events keep coming even if the cursor
+    /// briefly leaves the source area on the way to the drop zone.
+    /// </para>
     /// </summary>
     public sealed class DockDragManager
     {
@@ -16,15 +30,14 @@ namespace NarrativeTool.UI.Docking
         private readonly DockDropOverlay overlay;
 
         // Drag state
+        private bool armed;          // pointer is down on a tab header but threshold not yet met
         private bool dragging;
-        private bool armed;          // pointer is down on a tab but threshold not yet met
         private IDockablePanel draggedPanel;
         private DockArea sourceArea;
         private Vector2 startPos;
         private DockArea hoverArea;
         private DropSide hoverSide;
         private int activePointerId = -1;
-        private VisualElement capturedTab;
 
         public DockDragManager(DockRoot root)
         {
@@ -32,67 +45,33 @@ namespace NarrativeTool.UI.Docking
             overlay = new DockDropOverlay();
             root.Add(overlay);
 
-            // Hook every existing tab and any added later.
-            root.TabAdded += OnTabAdded;
-            foreach (var z in root.AllZones())
-                foreach (var area in z.AllAreas())
-                    foreach (var panel in area.Panels)
-                    {
-                        var tab = area.GetTab(panel.Id);
-                        if (tab != null) Attach(area, tab, panel);
-                    }
-
-            // Track movement at root level once a drag is armed.
-            // (Bubble phase is fine — these events reach root after the original
-            // target has already handled them, and we only act when armed=true.)
-            root.RegisterCallback<PointerMoveEvent>(OnRootPointerMove);
-            root.RegisterCallback<PointerUpEvent>(OnRootPointerUp);
-            // NOTE: deliberately NOT subscribing to PointerCaptureOutEvent on root.
-            // It bubbles up from any descendant releasing capture (e.g. a button
-            // inside a panel), and a stale Cancel() there would clobber unrelated
-            // state. Drag state is solely managed by Down/Move/Up.
-        }
-
-        // ───────────────────── Tab attachment ─────────────────────
-
-        private void OnTabAdded(DockArea area, Tab tab, IDockablePanel panel)
-            => Attach(area, tab, panel);
-
-        private void Attach(DockArea area, Tab tab, IDockablePanel panel)
-        {
-            // Register on the Tab's HEADER element only — not the whole Tab.
-            // Registering on `tab` itself caused two bugs:
-            //   1. Clicks inside the panel content (Variables row, Entities item,
-            //      etc.) trickle through the Tab on their way to the deep target.
-            //      With TrickleDown=true the handler armed a drag and captured
-            //      the pointer for every panel-internal click — freezing the UI.
-            //   2. The visible tab header (where the user actually clicks to
-            //      drag) is `unity-tab__header`, a child of Tab. Without listening
-            //      directly on it the click sometimes never reached us.
-            // Tab's header is created in its constructor so the Q lookup is safe
-            // here. Fall back to the Tab itself if the class name ever changes.
-            VisualElement header = tab.Q(className: "unity-tab__header") ?? (VisualElement)tab;
-            header.RegisterCallback<PointerDownEvent>(e => OnTabPointerDown(e, area, panel, tab));
+            // One trickle-phase handler for each pointer phase. TrickleDown wins
+            // over any descendant handler that calls StopPropagation, and it
+            // means we don't need per-Tab registration (which broke when Unity
+            // patches change the tab-header USS class names).
+            root.RegisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
+            root.RegisterCallback<PointerMoveEvent>(OnRootPointerMove, TrickleDown.TrickleDown);
+            root.RegisterCallback<PointerUpEvent>(OnRootPointerUp,    TrickleDown.TrickleDown);
         }
 
         // ───────────────────── Pointer handling ─────────────────────
 
-        private void OnTabPointerDown(PointerDownEvent e, DockArea area, IDockablePanel panel, Tab tab)
+        private void OnRootPointerDown(PointerDownEvent e)
         {
             if (e.button != 0) return;
-            // Arm a potential drag. We don't start until the pointer moves enough,
-            // so simple clicks still flow through to TabView for selection.
+            if (!FindTabHeaderClick(e.target as VisualElement, out var tab, out var area, out var panel))
+                return;
+
+            // Arm a potential drag. Don't capture the pointer yet — that would
+            // steal the up-event from TabView's tab-selection logic, breaking
+            // simple clicks. Capture is taken in OnRootPointerMove once the
+            // user crosses the drag threshold.
             armed = true;
             dragging = false;
             startPos = e.position;
             draggedPanel = panel;
             sourceArea = area;
             activePointerId = e.pointerId;
-            // Capture on the actual currentTarget (the header element). Doing this
-            // ensures move/up events keep coming to us even if the cursor leaves
-            // the header on the way to the drop zone.
-            capturedTab = e.currentTarget as VisualElement ?? tab;
-            capturedTab.CapturePointer(e.pointerId);
         }
 
         private void OnRootPointerMove(PointerMoveEvent e)
@@ -104,6 +83,9 @@ namespace NarrativeTool.UI.Docking
             {
                 if (Vector2.Distance(e.position, startPos) < DragThreshold) return;
                 dragging = true;
+                // Now the user is committed; capture so we keep getting move/up
+                // even if the cursor leaves the source area.
+                root.CapturePointer(activePointerId);
             }
 
             UpdateHover(e.position);
@@ -114,30 +96,78 @@ namespace NarrativeTool.UI.Docking
             if (!armed) return;
             if (e.pointerId != activePointerId) return;
 
-            if (dragging)
-            {
-                Commit(e.position);
-            }
-            // else: it was a click, do nothing — TabView already selected the tab.
+            if (dragging) Commit(e.position);
+            // else: simple click — let TabView handle selection. We never
+            // captured, so its own up-handler runs normally.
 
             Cancel();
         }
 
         private void Cancel()
         {
-            if (capturedTab != null && activePointerId >= 0)
-            {
-                if (capturedTab.HasPointerCapture(activePointerId))
-                    capturedTab.ReleasePointer(activePointerId);
-            }
+            if (activePointerId >= 0 && root.HasPointerCapture(activePointerId))
+                root.ReleasePointer(activePointerId);
+
             armed = false;
             dragging = false;
             draggedPanel = null;
             sourceArea = null;
             hoverArea = null;
             activePointerId = -1;
-            capturedTab = null;
             overlay.Hide();
+        }
+
+        // ───────────────────── Header detection ─────────────────────
+
+        /// <summary>
+        /// Walks the ancestor chain of <paramref name="target"/> looking for a
+        /// Tab whose header subtree contains the click. Returns true and fills
+        /// <paramref name="tab"/> / <paramref name="area"/> / <paramref name="panel"/>
+        /// only when the click was on a tab header (not on panel content,
+        /// canvas, dock splitter, etc.).
+        /// </summary>
+        private bool FindTabHeaderClick(VisualElement target,
+            out Tab tab, out DockArea area, out IDockablePanel panel)
+        {
+            tab = null; area = null; panel = null;
+            if (target == null) return false;
+
+            // Walk ancestors. The header is somewhere between target and the
+            // owning Tab. Be permissive about the exact class name — Unity has
+            // shipped variations across patches.
+            bool inHeader = false;
+            VisualElement cur = target;
+            int depth = 0;
+            while (cur != null && depth < 50)
+            {
+                if (LooksLikeTabHeader(cur)) inHeader = true;
+                if (cur is Tab t)
+                {
+                    tab = t;
+                    break;
+                }
+                cur = cur.parent;
+                depth++;
+            }
+            if (tab == null || !inHeader) return false;
+            if (!(tab.userData is IDockablePanel p)) return false;
+
+            // Find the DockArea that owns this panel.
+            foreach (var z in root.AllZones())
+            {
+                var a = z.FindAreaContaining(p.Id);
+                if (a != null) { area = a; panel = p; return true; }
+            }
+            return false;
+        }
+
+        private static bool LooksLikeTabHeader(VisualElement el)
+        {
+            // Cheap class-list scan for any header-like name.
+            if (el.ClassListContains("unity-tab__header")) return true;
+            if (el.ClassListContains("unity-tab__header-label")) return true;
+            if (el.name == "tab-header") return true;
+            return false;
         }
 
         // ───────────────────── Hit-testing & commit ─────────────────────
