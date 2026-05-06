@@ -37,10 +37,12 @@ namespace NarrativeTool.UI.Docking
 
         public void SetChildren(DockNode a, DockNode b)
         {
-            // Detach old
+            // Detach old children visually & logically (RemoveFromHierarchy is
+            // enough; we deliberately don't call splitView.Clear() since
+            // TwoPaneSplitView keeps internal references that don't survive a
+            // generic Clear()).
             if (first  != null) { first.Element.RemoveFromHierarchy();  first.Parent  = null; }
             if (second != null) { second.Element.RemoveFromHierarchy(); second.Parent = null; }
-            splitView.Clear();
 
             first  = a;
             second = b;
