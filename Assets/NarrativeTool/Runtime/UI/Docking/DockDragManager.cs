@@ -43,9 +43,14 @@ namespace NarrativeTool.UI.Docking
                     }
 
             // Track movement at root level once a drag is armed.
-            root.RegisterCallback<PointerMoveEvent>(OnRootPointerMove, TrickleDown.TrickleDown);
-            root.RegisterCallback<PointerUpEvent>(OnRootPointerUp,   TrickleDown.TrickleDown);
-            root.RegisterCallback<PointerCaptureOutEvent>(_ => Cancel());
+            // (Bubble phase is fine — these events reach root after the original
+            // target has already handled them, and we only act when armed=true.)
+            root.RegisterCallback<PointerMoveEvent>(OnRootPointerMove);
+            root.RegisterCallback<PointerUpEvent>(OnRootPointerUp);
+            // NOTE: deliberately NOT subscribing to PointerCaptureOutEvent on root.
+            // It bubbles up from any descendant releasing capture (e.g. a button
+            // inside a panel), and a stale Cancel() there would clobber unrelated
+            // state. Drag state is solely managed by Down/Move/Up.
         }
 
         // ───────────────────── Tab attachment ─────────────────────
@@ -55,9 +60,19 @@ namespace NarrativeTool.UI.Docking
 
         private void Attach(DockArea area, Tab tab, IDockablePanel panel)
         {
-            // Use TrickleDown to win over TabView's own click handler for selection.
-            tab.RegisterCallback<PointerDownEvent>(e => OnTabPointerDown(e, area, panel, tab),
-                TrickleDown.TrickleDown);
+            // Register on the Tab's HEADER element only — not the whole Tab.
+            // Registering on `tab` itself caused two bugs:
+            //   1. Clicks inside the panel content (Variables row, Entities item,
+            //      etc.) trickle through the Tab on their way to the deep target.
+            //      With TrickleDown=true the handler armed a drag and captured
+            //      the pointer for every panel-internal click — freezing the UI.
+            //   2. The visible tab header (where the user actually clicks to
+            //      drag) is `unity-tab__header`, a child of Tab. Without listening
+            //      directly on it the click sometimes never reached us.
+            // Tab's header is created in its constructor so the Q lookup is safe
+            // here. Fall back to the Tab itself if the class name ever changes.
+            VisualElement header = tab.Q(className: "unity-tab__header") ?? (VisualElement)tab;
+            header.RegisterCallback<PointerDownEvent>(e => OnTabPointerDown(e, area, panel, tab));
         }
 
         // ───────────────────── Pointer handling ─────────────────────
@@ -73,8 +88,11 @@ namespace NarrativeTool.UI.Docking
             draggedPanel = panel;
             sourceArea = area;
             activePointerId = e.pointerId;
-            capturedTab = tab;
-            tab.CapturePointer(e.pointerId);
+            // Capture on the actual currentTarget (the header element). Doing this
+            // ensures move/up events keep coming to us even if the cursor leaves
+            // the header on the way to the drop zone.
+            capturedTab = e.currentTarget as VisualElement ?? tab;
+            capturedTab.CapturePointer(e.pointerId);
         }
 
         private void OnRootPointerMove(PointerMoveEvent e)

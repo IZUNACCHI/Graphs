@@ -176,6 +176,7 @@ namespace NarrativeTool.UI
                 var p = d.Factory?.Invoke();
                 if (p != null) Dock.OpenPanel(p, d.DefaultZone);
             }
+            Dock.RefreshZoneVisibility();
         }
 
         // ───────────────────────── Toolbar ─────────────────────────
@@ -278,6 +279,7 @@ namespace NarrativeTool.UI
                     if (panel != null) Dock.OpenPanel(panel, d.DefaultZone);
                 }
             }
+            Dock.RefreshZoneVisibility();
 
             // Drag-drop wiring (after panels are mounted so initial scan picks them up).
             dragManager = new DockDragManager(Dock);
