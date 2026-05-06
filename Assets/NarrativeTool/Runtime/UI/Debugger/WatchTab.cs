@@ -25,7 +25,7 @@ namespace NarrativeTool.UI.Debugger
         private readonly EventBus bus;
         private readonly ContextMenuController contextMenu;
 
-        private readonly VisualElement listContainer;
+        private readonly ListView listView;
         private readonly Label footerSummary;
 
         private readonly List<WatchTarget> watched = new();
@@ -54,13 +54,20 @@ namespace NarrativeTool.UI.Debugger
             header.Add(MakeHeaderCell("TYPE", width: 36));
             Add(header);
 
-            // List
-            var scroll = new ScrollView();
-            scroll.style.flexGrow = 1;
-            listContainer = new VisualElement();
-            listContainer.style.flexDirection = FlexDirection.Column;
-            scroll.Add(listContainer);
-            Add(scroll);
+            // Native, virtualised list (Phase 3 — replaces hand-rolled ScrollView).
+            listView = new ListView
+            {
+                itemsSource = watched,
+                fixedItemHeight = 22,
+                makeItem = MakeRow,
+                bindItem = BindRow,
+                selectionType = SelectionType.None,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.None,
+                showBorder = false,
+                reorderable = false,
+            };
+            listView.style.flexGrow = 1;
+            Add(listView);
 
             // Footer
             var footer = new VisualElement();
@@ -184,48 +191,71 @@ namespace NarrativeTool.UI.Debugger
 
         public void Refresh()
         {
-            listContainer.Clear();
+            listView.RefreshItems();
             int changedCount = 0;
-
             foreach (var t in watched)
-            {
-                var type = ResolveType(t);
-                var value = ReadValue(t);
-                bool changed = changedSinceStep.ContainsKey(t);
-                if (changed) changedCount++;
-
-                var row = new VisualElement();
-                row.AddToClassList("debugger-row");
-                if (changed)
-                    row.AddToClassList("debugger-watch__row--changed-amber");
-
-                var nameLabel = new Label(t.DisplayName);
-                nameLabel.AddToClassList("debugger-watch__name");
-                if (!changed) nameLabel.AddToClassList("debugger-watch__name--unchanged");
-                row.Add(nameLabel);
-
-                var valueLabel = new Label(FormatValue(value, type, t));
-                valueLabel.AddToClassList("debugger-watch__value");
-                if (changed) valueLabel.AddToClassList("debugger-watch__value--amber");
-                row.Add(valueLabel);
-
-                var typeBadge = new Label(FormatType(type));
-                typeBadge.AddToClassList("debugger-watch__type-badge");
-                row.Add(typeBadge);
-
-                row.RegisterCallback<MouseDownEvent>(evt =>
-                {
-                    if (evt.button == 1)
-                    {
-                        contextMenu?.Open(new WatchContextTarget(this, t), evt.mousePosition);
-                        evt.StopPropagation();
-                    }
-                });
-
-                listContainer.Add(row);
-            }
-
+                if (changedSinceStep.ContainsKey(t)) changedCount++;
             footerSummary.text = $"{watched.Count} vars · {changedCount} changed";
+        }
+
+        private static VisualElement MakeRow()
+        {
+            var row = new VisualElement();
+            row.AddToClassList("debugger-row");
+
+            var nameLabel = new Label();
+            nameLabel.AddToClassList("debugger-watch__name");
+            nameLabel.name = "name";
+            row.Add(nameLabel);
+
+            var valueLabel = new Label();
+            valueLabel.AddToClassList("debugger-watch__value");
+            valueLabel.name = "value";
+            row.Add(valueLabel);
+
+            var typeBadge = new Label();
+            typeBadge.AddToClassList("debugger-watch__type-badge");
+            typeBadge.name = "type";
+            row.Add(typeBadge);
+
+            return row;
+        }
+
+        private void BindRow(VisualElement row, int index)
+        {
+            if (index < 0 || index >= watched.Count) return;
+            var t = watched[index];
+            var type = ResolveType(t);
+            var value = ReadValue(t);
+            bool changed = changedSinceStep.ContainsKey(t);
+
+            row.EnableInClassList("debugger-watch__row--changed-amber", changed);
+
+            var nameLabel = row.Q<Label>("name");
+            nameLabel.text = t.DisplayName;
+            nameLabel.EnableInClassList("debugger-watch__name--unchanged", !changed);
+
+            var valueLabel = row.Q<Label>("value");
+            valueLabel.text = FormatValue(value, type, t);
+            valueLabel.EnableInClassList("debugger-watch__value--amber", changed);
+
+            var typeBadge = row.Q<Label>("type");
+            typeBadge.text = FormatType(type);
+
+            // Reset previous handler (ListView reuses row instances across binds).
+            row.UnregisterCallback<MouseDownEvent>(OnRowMouseDown);
+            row.userData = t;
+            row.RegisterCallback<MouseDownEvent>(OnRowMouseDown);
+        }
+
+        private void OnRowMouseDown(MouseDownEvent evt)
+        {
+            if (evt.button != 1) return;
+            if (evt.currentTarget is VisualElement row && row.userData is WatchTarget t)
+            {
+                contextMenu?.Open(new WatchContextTarget(this, t), evt.mousePosition);
+                evt.StopPropagation();
+            }
         }
 
         private string FormatValue(object value, VariableType? type, WatchTarget t)

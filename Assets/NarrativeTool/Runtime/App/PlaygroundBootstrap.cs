@@ -18,6 +18,12 @@ using System;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
+// PlaygroundBootstrap is now a thin shell:
+//   • Awake/Start: register services, load theme, register context-menu providers
+//   • ShowLibrary / ShowWizard: project chooser
+//   • OpenEditor: hand off to MainWindow, hold the runtime engine on its behalf
+// All editor layout (menu bar, toolbar, sidebar, canvas, runtime panels) now
+// lives in NarrativeTool.UI.MainWindow.
 
 namespace NarrativeTool.App
 {
@@ -33,18 +39,15 @@ namespace NarrativeTool.App
 
         // ── Editor / canvas ──
         private VisualElement root;
-        private GraphTabManager tabManager;
+        private MainWindow mainWindow;
+        private GraphTabManager tabManager;          // alias of mainWindow.TabManager
+        private RuntimePanel runtimePanel;           // alias of mainWindow.RuntimePanel
+        private DebuggerPanel debuggerPanel;         // alias of mainWindow.DebuggerPanel
 
         // ── Runtime ──
         private RuntimeEngine runtimeEngine;
-        private RuntimePanel runtimePanel;
-        private DebuggerPanel debuggerPanel;
         private BreakpointStore breakpointStore;
         private IDisposable runtimeStateSub;
-
-        // ── Toolbar controls ──
-        private Button btnPlayGraph, btnStopRuntime;
-        private Label runIndicator;
 
         private void Awake()
         {
@@ -148,8 +151,11 @@ namespace NarrativeTool.App
         private void CloseEditor()
         {
             StopRuntime();
-            tabManager?.UnsubscribeEvents();
+            mainWindow?.Teardown();
+            mainWindow = null;
             tabManager = null;
+            runtimePanel = null;
+            debuggerPanel = null;
         }
 
         private void ShowWizard()
@@ -191,76 +197,36 @@ namespace NarrativeTool.App
 
             ClearRoot();
 
-            // ── Run toolbar (top bar) ──
-            var runToolbar = new VisualElement();
-            runToolbar.AddToClassList("run-toolbar");
-            runToolbar.style.flexDirection = FlexDirection.Row;
-
-            btnPlayGraph = new Button(() => StartRuntime());
-            btnPlayGraph.text = "▶ Run Graph";
-            btnPlayGraph.AddToClassList("run-toolbar__btn");
-            btnPlayGraph.AddToClassList("run-toolbar__btn--graph");
-
-            btnStopRuntime = new Button(() => StopRuntime());
-            btnStopRuntime.text = "■ Stop";
-            btnStopRuntime.AddToClassList("run-toolbar__btn");
-            btnStopRuntime.AddToClassList("run-toolbar__btn--stop");
-
-            runIndicator = new Label("");
-            runIndicator.AddToClassList("run-toolbar__run-indicator");
-
-            runToolbar.Add(btnPlayGraph);
-            runToolbar.Add(btnStopRuntime);
-            runToolbar.Add(runIndicator);
-            root.Add(runToolbar);
-
-            // ── Main split: sidebar + canvas + runtime panel ──
-            var split = new VisualElement();
-            split.AddToClassList("nt-root");
-            split.style.flexDirection = FlexDirection.Row;
-            split.style.flexGrow = 1;
-            split.focusable = true;
-            root.Add(split);
-
-            var sidebar = new ProjectSidebar();
-            split.Add(sidebar);
-            sidebar.Bind(project, session, contextMenu);
-
-            tabManager = new GraphTabManager(session, contextMenu);
-            tabManager.SubscribeToEvents(session.Bus);
-            tabManager.style.flexGrow = 1;
-            split.Add(tabManager);
-
-            // Open the first graph as a tab (if any)
-            var firstGraphLazy = project.Graphs.Items.FirstOrDefault();
-            if (firstGraphLazy != null)
-                tabManager.OpenGraph(firstGraphLazy);
-
-            // Subscribe to sidebar double‑click → open tab
-            sidebar.OnGraphDoubleClicked += lazy => tabManager.OpenGraph(lazy);
-
-            // Runtime panel (hidden until Play is pressed)
-            runtimePanel = new RuntimePanel();
-            runtimePanel.style.width = 250;
-            runtimePanel.style.display = DisplayStyle.None;
-            split.Add(runtimePanel);
-
-            // Debugger panel (hidden until Play is pressed)
-            debuggerPanel = new DebuggerPanel();
-            debuggerPanel.style.width = 280;
-            debuggerPanel.style.display = DisplayStyle.None;
-            split.Add(debuggerPanel);
-
-            // Ctrl+S saves the active tab & project
-            split.RegisterCallback<KeyDownEvent>(e =>
+            mainWindow = new MainWindow(project, session, contextMenu, new MainWindowCallbacks
             {
-                if ((e.ctrlKey || e.commandKey) && e.keyCode == KeyCode.S)
-                {
-                    tabManager.SaveActiveTab();
-                    SaveCurrent();
-                    e.StopPropagation();
-                }
+                OnBackToLibrary = ShowLibrary,
+                OnSave          = () => { mainWindow?.TabManager?.SaveActiveTab(); SaveCurrent(); },
+                OnSaveAll       = SaveAll,
+                OnPlayProject   = () => StartRuntime(),  // TODO: distinguish project-vs-graph entry point
+                OnPlayGraph     = () => StartRuntime(),
+                OnStop          = StopRuntime,
+                IsRunning       = () => runtimeEngine != null
+                                        && (runtimeEngine.State == RuntimeState.Running
+                                            || runtimeEngine.State == RuntimeState.Paused),
+                ProjectTitle    = () => session.Project?.Name,
             });
+            root.Add(mainWindow);
+
+            // Aliases keep StartRuntime/StopRuntime/etc. unchanged.
+            tabManager    = mainWindow.TabManager;
+            runtimePanel  = mainWindow.RuntimePanel;
+            debuggerPanel = mainWindow.DebuggerPanel;
+        }
+
+        private void SaveAll()
+        {
+            if (mainWindow?.TabManager != null)
+            {
+                // Save every open dirty tab.
+                foreach (var t in mainWindow.TabManager.AllTabs)
+                    if (t.IsDirty) t.Save();
+            }
+            SaveCurrent();
         }
 
         // ───────── Runtime start/stop ─────────
@@ -318,16 +284,16 @@ namespace NarrativeTool.App
 
             runtimeStateSub = session.Bus.Subscribe<RuntimeStateChanged>(e =>
             {
-                bool running = e.NewState == RuntimeState.Running || e.NewState == RuntimeState.Paused;
-                btnPlayGraph?.SetEnabled(!running);
-                btnStopRuntime?.SetEnabled(running);
-                if (runIndicator != null) runIndicator.text = running ? "● Running" : "";
                 if (e.NewState == RuntimeState.Idle || e.NewState == RuntimeState.Done)
                 {
                     if (runtimePanel != null) runtimePanel.style.display = DisplayStyle.None;
                     if (debuggerPanel != null) debuggerPanel.style.display = DisplayStyle.None;
                 }
+                // Toolbar visibility predicates read IsRunning(); refresh them.
+                mainWindow?.NotifyRuntimeStateChanged();
             });
+
+            mainWindow?.NotifyRuntimeStateChanged();
         }
 
         private void StopRuntime()
@@ -341,9 +307,7 @@ namespace NarrativeTool.App
             runtimeStateSub?.Dispose();
             runtimeStateSub = null;
 
-            btnPlayGraph?.SetEnabled(true);
-            btnStopRuntime?.SetEnabled(false);
-            if (runIndicator != null) runIndicator.text = "";
+            mainWindow?.NotifyRuntimeStateChanged();
         }
 
         // ───────── Save ─────────
