@@ -47,6 +47,7 @@ namespace NarrativeTool.UI
 
         // Body — exposed so the host can wire runtime engine, save shortcuts, etc.
         public DockRoot Dock              { get; private set; }
+        private DockDragManager dragManager;
         public GraphsPanel    GraphsPanelView    { get; private set; }
         public VariablesPanel VariablesPanelView { get; private set; }
         public EntitiesPanel  EntitiesPanelView  { get; private set; }
@@ -159,8 +160,16 @@ namespace NarrativeTool.UI
 
         private void ResetLayout()
         {
-            // Phase 2a: just close everything and re-open from the registry.
             if (Dock == null) return;
+
+            // Drop the persisted layout so next open uses defaults.
+            try
+            {
+                if (System.IO.File.Exists(DockLayoutSerializer.DefaultPath))
+                    System.IO.File.Delete(DockLayoutSerializer.DefaultPath);
+            }
+            catch (System.Exception ex) { Debug.LogWarning("[ResetLayout] " + ex.Message); }
+
             foreach (var d in DockRegistry.All) Dock.ClosePanel(d.Id);
             foreach (var d in DockRegistry.All)
             {
@@ -260,12 +269,18 @@ namespace NarrativeTool.UI
             // center DockArea so graphs can be split/dragged like other panels.
             Dock.Center.SetCustomContent(TabManager);
 
-            // Open every registered panel in its default zone.
-            foreach (var d in DockRegistry.All)
+            // Try to restore a saved layout; if none, fall back to defaults.
+            if (!DockLayoutSerializer.Load(Dock))
             {
-                var panel = d.Factory?.Invoke();
-                if (panel != null) Dock.OpenPanel(panel, d.DefaultZone);
+                foreach (var d in DockRegistry.All)
+                {
+                    var panel = d.Factory?.Invoke();
+                    if (panel != null) Dock.OpenPanel(panel, d.DefaultZone);
+                }
             }
+
+            // Drag-drop wiring (after panels are mounted so initial scan picks them up).
+            dragManager = new DockDragManager(Dock);
         }
 
         private void RegisterPanelDescriptors()
@@ -314,6 +329,9 @@ namespace NarrativeTool.UI
 
         public void Teardown()
         {
+            // Persist current layout before tearing down (per-user, global).
+            if (Dock != null) DockLayoutSerializer.Save(Dock);
+
             TabManager?.UnsubscribeEvents();
             ToolbarRegistry.Clear();
             MenuBarRegistry.Clear();

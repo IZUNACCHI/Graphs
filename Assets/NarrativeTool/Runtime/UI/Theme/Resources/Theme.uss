@@ -2165,3 +2165,11 @@
 .nt-dock-split {
     flex-grow: 1;
 }
+
+/* Dock drop overlay */
+.nt-dock-overlay {
+    background-color: rgba(74, 154, 106, 0.18);
+    border-color: rgb(125, 207, 160);
+    border-width: 1px;
+    border-radius: 2px;
+}

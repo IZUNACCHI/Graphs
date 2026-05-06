@@ -44,6 +44,9 @@ namespace NarrativeTool.UI.Docking
             tabView.Add(tab);
             panels.Add(p);
             tabsById[p.Id] = tab;
+
+            // Notify root so the drag manager can attach pointer handlers.
+            Zone?.Owner?.RaiseTabAdded(this, tab, p);
         }
 
         /// <summary>Removes the tab without disposing the panel content. Returns

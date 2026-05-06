@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine.UIElements;
 
@@ -21,16 +22,22 @@ namespace NarrativeTool.UI.Docking
         public DockZone Bottom { get; }
         public DockZone Center { get; }
 
+        /// <summary>Fired whenever a Tab is added to any DockArea anywhere in the
+        /// tree. The drag manager subscribes to register pointer handlers on
+        /// newly-created tabs (e.g. after a split).</summary>
+        public event Action<DockArea, Tab, IDockablePanel> TabAdded;
+        internal void RaiseTabAdded(DockArea a, Tab t, IDockablePanel p) => TabAdded?.Invoke(a, t, p);
+
         public DockRoot()
         {
             AddToClassList("nt-dock-root");
             style.flexGrow = 1;
             style.flexDirection = FlexDirection.Row;
 
-            Left   = new DockZone(DockZoneKind.Left);
-            Right  = new DockZone(DockZoneKind.Right);
-            Bottom = new DockZone(DockZoneKind.Bottom);
-            Center = new DockZone(DockZoneKind.Center);
+            Left   = new DockZone(DockZoneKind.Left)   { Owner = this };
+            Right  = new DockZone(DockZoneKind.Right)  { Owner = this };
+            Bottom = new DockZone(DockZoneKind.Bottom) { Owner = this };
+            Center = new DockZone(DockZoneKind.Center) { Owner = this };
 
             // center column (center top + bottom).
             var centerCol = new TwoPaneSplitView(1, 200f, TwoPaneSplitViewOrientation.Vertical);
@@ -112,6 +119,46 @@ namespace NarrativeTool.UI.Docking
                 if (a != null) return a;
             }
             return null;
+        }
+
+        /// <summary>Moves a panel from its current area to <paramref name="targetArea"/>.
+        /// If <paramref name="side"/> is Center the panel becomes a new tab in the
+        /// target. Otherwise the target is split in two and the panel goes into the
+        /// new sibling area.</summary>
+        public bool MoveTab(string panelId, DockArea targetArea, DropSide side)
+        {
+            if (string.IsNullOrEmpty(panelId) || targetArea == null) return false;
+            var sourceArea = FindArea(panelId);
+            if (sourceArea == null) return false;
+
+            // No-op: dropping on the same single-area-with-one-panel.
+            if (sourceArea == targetArea && side == DropSide.Center) return false;
+
+            var panel = sourceArea.GetPanel(panelId);
+            if (panel == null) return false;
+
+            // Validate pinned-center constraints.
+            var targetZone = targetArea.Zone;
+            if (panel.IsPinnedCenter && targetZone.Kind != DockZoneKind.Center) return false;
+            if (!panel.IsPinnedCenter && targetZone.Kind == DockZoneKind.Center) return false;
+
+            // Detach (also disposes nothing — content is preserved).
+            sourceArea.DetachPanel(panelId);
+
+            if (side == DropSide.Center)
+            {
+                targetArea.AddPanel(panel);
+                targetArea.SelectPanel(panelId);
+            }
+            else
+            {
+                var newArea = targetZone.SplitArea(targetArea, side, panel);
+                newArea?.SelectPanel(panelId);
+            }
+
+            // Collapse the source area if it became empty.
+            if (sourceArea.IsEmpty) sourceArea.Zone?.CollapseArea(sourceArea);
+            return true;
         }
     }
 }

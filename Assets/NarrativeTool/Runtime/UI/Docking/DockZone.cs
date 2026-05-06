@@ -16,6 +16,10 @@ namespace NarrativeTool.UI.Docking
         public bool AllowsPinnedCenter => Kind == DockZoneKind.Center;
         public DockNode Root => root;
 
+        /// <summary>Back-reference set by <see cref="DockRoot"/> so areas can
+        /// publish events (e.g. "tab added") through to the drag manager.</summary>
+        public DockRoot Owner { get; internal set; }
+
         public DockZone(DockZoneKind kind)
         {
             Kind = kind;
