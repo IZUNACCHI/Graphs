@@ -35,7 +35,7 @@ namespace NarrativeTool.UI.Docking
 
             var tab = new Tab(p.Title);
             tab.AddToClassList("nt-dock-tab");
-            tab.userData = p; // used by drag manager to find owning panel
+            tab.userData = p; // used by serializer & drag manager
             // Re-parent panel content into the tab.
             p.Content.RemoveFromHierarchy();
             p.Content.style.flexGrow = 1;
@@ -45,8 +45,30 @@ namespace NarrativeTool.UI.Docking
             panels.Add(p);
             tabsById[p.Id] = tab;
 
-            // Notify root so the drag manager can attach pointer handlers.
+            // In Unity 6.0.3 the Tab's header element is reparented OUT of the
+            // Tab and into the TabView's `unity-tab-view__header-container`,
+            // so a header click cannot reach the owning Tab via the parent
+            // chain. Tag the just-created header element with our own marker
+            // class + userData so the drag manager can identify which panel
+            // a header click belongs to.
+            int headerIndex = panels.Count - 1;
+            tabView.schedule.Execute(() => MarkHeader(headerIndex, p)).ExecuteLater(0);
+
+            // Notify root (no-op subscribers today; kept for future extensions).
             Zone?.Owner?.RaiseTabAdded(this, tab, p);
+        }
+
+        /// <summary>USS class added to each Tab's header element so
+        /// <c>DockDragManager</c> can detect header clicks via ancestor walk.</summary>
+        public const string HeaderMarkerClass = "nt-dock-tab-header";
+
+        private void MarkHeader(int index, IDockablePanel p)
+        {
+            var hc = tabView.Q(className: "unity-tab-view__header-container");
+            if (hc == null || index < 0 || index >= hc.childCount) return;
+            var header = hc[index];
+            header.AddToClassList(HeaderMarkerClass);
+            header.userData = p;
         }
 
         /// <summary>Removes the tab without disposing the panel content. Returns
