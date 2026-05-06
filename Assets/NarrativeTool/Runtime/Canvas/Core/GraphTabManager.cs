@@ -18,6 +18,9 @@ namespace NarrativeTool.Canvas.Core
 
         public GraphTab ActiveTab => activeTab;
 
+        /// <summary>All currently open tabs, in order of creation.</summary>
+        public IReadOnlyList<GraphTab> AllTabs => tabs;
+
         private readonly SessionState session;
         private readonly ContextMenuController contextMenu;
 
