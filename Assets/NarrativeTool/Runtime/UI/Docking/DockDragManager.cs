@@ -1,3 +1,4 @@
+using System.Text;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -25,6 +26,15 @@ namespace NarrativeTool.UI.Docking
     public sealed class DockDragManager
     {
         private const float DragThreshold = 5f;
+
+        /// <summary>
+        /// Temporary diagnostic switch. While true the manager logs every
+        /// PointerDown it sees, the click target, its type, the ancestor chain,
+        /// and which step (if any) rejected the click as "not a tab header
+        /// drag". Used to debug why dragging doesn't arm; flip back to false
+        /// once the root cause is fixed.
+        /// </summary>
+        public static bool LogDragDiagnostics = true;
 
         private readonly DockRoot root;
         private readonly DockDropOverlay overlay;
@@ -58,9 +68,20 @@ namespace NarrativeTool.UI.Docking
 
         private void OnRootPointerDown(PointerDownEvent e)
         {
-            if (e.button != 0) return;
+            if (e.button != 0)
+            {
+                if (LogDragDiagnostics)
+                    Debug.Log($"[DockDrag] PointerDown ignored — button={e.button} (only button 0 starts drags).");
+                return;
+            }
+
+            if (LogDragDiagnostics) DiagnoseClick(e);
+
             if (!FindTabHeaderClick(e.target as VisualElement, out var tab, out var area, out var panel))
                 return;
+
+            if (LogDragDiagnostics)
+                Debug.Log($"[DockDrag] ARMED on panel='{panel.Id}' area={area.GetHashCode()} pointer={e.pointerId}");
 
             // Arm a potential drag. Don't capture the pointer yet — that would
             // steal the up-event from TabView's tab-selection logic, breaking
@@ -72,6 +93,68 @@ namespace NarrativeTool.UI.Docking
             draggedPanel = panel;
             sourceArea = area;
             activePointerId = e.pointerId;
+        }
+
+        // ───────────────────── Diagnostics ─────────────────────
+
+        private static void DiagnoseClick(PointerDownEvent e)
+        {
+            var target = e.target as VisualElement;
+            var sb = new StringBuilder();
+            sb.Append("[DockDrag] PointerDown @ ").Append(e.position).Append("\n");
+            sb.Append("  target = ").Append(Describe(target)).Append("\n");
+
+            // Walk ancestors so we can see what's between target and the panel root.
+            sb.Append("  ancestors:");
+            int i = 0;
+            for (var cur = target?.parent; cur != null && i < 30; cur = cur.parent, i++)
+                sb.Append("\n    [").Append(i).Append("] ").Append(Describe(cur));
+            if (i == 30) sb.Append("\n    … (truncated)");
+
+            // If a Tab is in the chain, report whether the click landed inside its
+            // contentContainer (panel content) vs outside (header).
+            Tab tab = null;
+            for (var cur = target; cur != null; cur = cur.parent)
+                if (cur is Tab t) { tab = t; break; }
+            if (tab == null)
+            {
+                sb.Append("\n  -> no enclosing Tab in ancestor chain (click was on splitter/canvas/etc).");
+            }
+            else
+            {
+                var content = tab.contentContainer;
+                sb.Append("\n  enclosing Tab = ").Append(Describe(tab));
+                sb.Append("\n  Tab.contentContainer = ").Append(Describe(content));
+                sb.Append("\n  Tab.userData = ").Append(tab.userData?.GetType().FullName ?? "<null>");
+                bool hitsContent = false;
+                if (content != null && content != tab)
+                {
+                    for (var c = target; c != null && c != tab; c = c.parent)
+                        if (c == content) { hitsContent = true; break; }
+                }
+                sb.Append("\n  -> click traverses contentContainer? ").Append(hitsContent)
+                  .Append(hitsContent ? " (panel content — drag skipped)" : " (header strip — should ARM)");
+            }
+            Debug.Log(sb.ToString());
+        }
+
+        private static string Describe(VisualElement el)
+        {
+            if (el == null) return "<null>";
+            var sb = new StringBuilder();
+            sb.Append(el.GetType().Name);
+            if (!string.IsNullOrEmpty(el.name)) sb.Append("#").Append(el.name);
+            // First few class names
+            int count = 0;
+            foreach (var cls in el.GetClasses())
+            {
+                if (count == 0) sb.Append("  classes=[");
+                if (count > 0) sb.Append(",");
+                sb.Append(cls);
+                if (++count >= 6) { sb.Append(",…"); break; }
+            }
+            if (count > 0) sb.Append("]");
+            return sb.ToString();
         }
 
         private void OnRootPointerMove(PointerMoveEvent e)
