@@ -2130,3 +2130,38 @@
 .nt-toolbar__btn--library {
     color: rgb(120,120,120);
 }
+
+/* ─────────────────────────  Dock framework (Phase 2) ───────────────────────── */
+.nt-dock-root {
+    flex-grow: 1;
+    flex-direction: row;
+    background-color: rgb(26,26,26);
+}
+.nt-dock-zone {
+    flex-grow: 1;
+    background-color: rgb(30,30,30);
+    border-color: rgb(42,42,42);
+    border-left-width: 1px;
+    border-right-width: 1px;
+}
+.nt-dock-zone--left  { border-left-width: 0; }
+.nt-dock-zone--right { border-right-width: 0; }
+.nt-dock-zone--center {
+    background-color: rgb(26,26,26);
+}
+.nt-dock-area {
+    flex-grow: 1;
+}
+.nt-dock-area > .unity-tab-view__header-container {
+    background-color: rgb(22,22,22);
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(42,42,42);
+    height: 26px;
+}
+.nt-dock-tab {
+    color: rgb(170,170,170);
+    font-size: 11px;
+}
+.nt-dock-split {
+    flex-grow: 1;
+}

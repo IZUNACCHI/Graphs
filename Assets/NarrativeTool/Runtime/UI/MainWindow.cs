@@ -2,9 +2,13 @@ using NarrativeTool.Canvas.Core;
 using NarrativeTool.Core.ContextMenu;
 using NarrativeTool.Data.Project;
 using NarrativeTool.UI.Debugger;
+using NarrativeTool.UI.Docking;
+using NarrativeTool.UI.Entities;
+using NarrativeTool.UI.Graphs;
 using NarrativeTool.UI.MenuBar;
 using NarrativeTool.UI.Runtime;
 using NarrativeTool.UI.Toolbar;
+using NarrativeTool.UI.Variables;
 using System;
 using System.Linq;
 using UnityEngine;
@@ -41,8 +45,11 @@ namespace NarrativeTool.UI
         public MenuBar.MenuBar MenuBarView { get; private set; }
         public Toolbar.Toolbar ToolbarView { get; private set; }
 
-        // Body (Phase 1: legacy layout) — exposed so the host can wire runtime engine.
-        public ProjectSidebar Sidebar     { get; private set; }
+        // Body — exposed so the host can wire runtime engine, save shortcuts, etc.
+        public DockRoot Dock              { get; private set; }
+        public GraphsPanel    GraphsPanelView    { get; private set; }
+        public VariablesPanel VariablesPanelView { get; private set; }
+        public EntitiesPanel  EntitiesPanelView  { get; private set; }
         public GraphTabManager TabManager { get; private set; }
         public RuntimePanel RuntimePanel  { get; private set; }
         public DebuggerPanel DebuggerPanel { get; private set; }
@@ -66,10 +73,16 @@ namespace NarrativeTool.UI
             // is opened more than once during a session.
             MenuBarRegistry.Clear();
             ToolbarRegistry.Clear();
+            DockRegistry.Clear();
 
+            // Order matters: panels are instantiated and registered first so the
+            // menu bar can enumerate them; then menu/toolbar are mounted (top of
+            // the column) before the body.
+            CreatePanels();
+            RegisterPanelDescriptors();
             BuildMenuBar();
             BuildToolbar();
-            BuildBody();
+            MountDock();
             RegisterShortcuts();
         }
 
@@ -108,10 +121,52 @@ namespace NarrativeTool.UI
             // Settings
             MenuBarRegistry.Register(new MenuItemDescriptor {
                 Menu = "Settings", Path = "Preferences…", Order = 0,
-                Action = () => Debug.Log("[Settings] Preferences (TODO)") });
+                Action = () => Debug.Log("[Settings] Preferences (TODO)"),
+                IsSeparatorAfter = true });
             MenuBarRegistry.Register(new MenuItemDescriptor {
                 Menu = "Settings", Path = "Reset Layout", Order = 10,
-                Action = () => Debug.Log("[Settings] Reset Layout (TODO – Phase 2)") });
+                Action = ResetLayout,
+                IsSeparatorAfter = true });
+
+            // Settings → Show <panel> for every registered dockable panel.
+            int order = 100;
+            foreach (var d in DockRegistry.All)
+            {
+                var captured = d;
+                MenuBarRegistry.Register(new MenuItemDescriptor {
+                    Menu = "Settings", Path = "Show " + captured.Title, Order = order,
+                    IsChecked = () => Dock != null && Dock.IsOpen(captured.Id),
+                    Action = () => TogglePanel(captured.Id),
+                });
+                order += 10;
+            }
+        }
+
+        private void TogglePanel(string id)
+        {
+            if (Dock == null) return;
+            if (Dock.IsOpen(id))
+            {
+                Dock.ClosePanel(id);
+            }
+            else
+            {
+                var d = DockRegistry.Find(id);
+                if (d?.Factory != null)
+                    Dock.OpenPanel(d.Factory(), d.DefaultZone);
+            }
+        }
+
+        private void ResetLayout()
+        {
+            // Phase 2a: just close everything and re-open from the registry.
+            if (Dock == null) return;
+            foreach (var d in DockRegistry.All) Dock.ClosePanel(d.Id);
+            foreach (var d in DockRegistry.All)
+            {
+                var p = d.Factory?.Invoke();
+                if (p != null) Dock.OpenPanel(p, d.DefaultZone);
+            }
         }
 
         // ───────────────────────── Toolbar ─────────────────────────
@@ -169,41 +224,77 @@ namespace NarrativeTool.UI
             return b;
         }
 
-        // ───────────────────────── Body (Phase 1: legacy three-column layout) ─────────────────────────
+        // ───────────────────────── Body (DockRoot) ─────────────────────────
 
-        private void BuildBody()
+        private void CreatePanels()
         {
-            var split = new VisualElement();
-            split.AddToClassList("nt-root");
-            split.style.flexDirection = FlexDirection.Row;
-            split.style.flexGrow = 1;
-            split.focusable = true;
-            Add(split);
-
-            Sidebar = new ProjectSidebar();
-            split.Add(Sidebar);
-            Sidebar.Bind(project, session, contextMenu);
+            GraphsPanelView    = new GraphsPanel();
+            VariablesPanelView = new VariablesPanel();
+            EntitiesPanelView  = new EntitiesPanel();
+            GraphsPanelView.Bind(project, session, contextMenu);
+            VariablesPanelView.Bind(project, session, contextMenu);
+            EntitiesPanelView.Bind(project, session, contextMenu);
 
             TabManager = new GraphTabManager(session, contextMenu);
             TabManager.SubscribeToEvents(session.Bus);
             TabManager.style.flexGrow = 1;
-            split.Add(TabManager);
 
             var firstGraphLazy = project?.Graphs.Items.FirstOrDefault();
             if (firstGraphLazy != null)
                 TabManager.OpenGraph(firstGraphLazy);
+            GraphsPanelView.OnGraphDoubleClicked += lazy => TabManager.OpenGraph(lazy);
 
-            Sidebar.OnGraphDoubleClicked += lazy => TabManager.OpenGraph(lazy);
-
-            RuntimePanel = new RuntimePanel();
-            RuntimePanel.style.width = 250;
-            RuntimePanel.style.display = DisplayStyle.None;
-            split.Add(RuntimePanel);
-
+            RuntimePanel  = new RuntimePanel();
+            RuntimePanel.style.display  = DisplayStyle.None;
             DebuggerPanel = new DebuggerPanel();
-            DebuggerPanel.style.width = 280;
             DebuggerPanel.style.display = DisplayStyle.None;
-            split.Add(DebuggerPanel);
+        }
+
+        private void MountDock()
+        {
+            Dock = new DockRoot();
+            Add(Dock);
+
+            // Phase 2a hosts GraphTabManager as the center zone's raw content;
+            // Phase 2c will turn each open graph into an IDockablePanel inside the
+            // center DockArea so graphs can be split/dragged like other panels.
+            Dock.Center.SetCustomContent(TabManager);
+
+            // Open every registered panel in its default zone.
+            foreach (var d in DockRegistry.All)
+            {
+                var panel = d.Factory?.Invoke();
+                if (panel != null) Dock.OpenPanel(panel, d.DefaultZone);
+            }
+        }
+
+        private void RegisterPanelDescriptors()
+        {
+            DockRegistry.Register(new DockablePanelDescriptor {
+                Id = "graphs", Title = "Graphs",
+                DefaultZone = DockZoneKind.Left, DefaultOrder = 0,
+                Factory = () => new DockablePanelAdapter("graphs", "Graphs", GraphsPanelView)
+            });
+            DockRegistry.Register(new DockablePanelDescriptor {
+                Id = "variables", Title = "Variables",
+                DefaultZone = DockZoneKind.Left, DefaultOrder = 10,
+                Factory = () => new DockablePanelAdapter("variables", "Variables", VariablesPanelView)
+            });
+            DockRegistry.Register(new DockablePanelDescriptor {
+                Id = "entities", Title = "Entities",
+                DefaultZone = DockZoneKind.Left, DefaultOrder = 20,
+                Factory = () => new DockablePanelAdapter("entities", "Entities", EntitiesPanelView)
+            });
+            DockRegistry.Register(new DockablePanelDescriptor {
+                Id = "runtime", Title = "Runtime",
+                DefaultZone = DockZoneKind.Right, DefaultOrder = 0,
+                Factory = () => new DockablePanelAdapter("runtime", "Runtime", RuntimePanel)
+            });
+            DockRegistry.Register(new DockablePanelDescriptor {
+                Id = "debugger", Title = "Debugger",
+                DefaultZone = DockZoneKind.Right, DefaultOrder = 10,
+                Factory = () => new DockablePanelAdapter("debugger", "Debugger", DebuggerPanel)
+            });
         }
 
         // ───────────────────────── Shortcuts ─────────────────────────
@@ -226,6 +317,7 @@ namespace NarrativeTool.UI
             TabManager?.UnsubscribeEvents();
             ToolbarRegistry.Clear();
             MenuBarRegistry.Clear();
+            DockRegistry.Clear();
         }
     }
 }
