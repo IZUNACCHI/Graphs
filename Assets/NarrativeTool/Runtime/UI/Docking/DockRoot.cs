@@ -159,19 +159,27 @@ namespace NarrativeTool.UI.Docking
 
         private bool dragActive;
 
-        public void BeginDrag()
+        /// <summary>Begin a drag. <paramref name="exposeEmptySideZones"/> should
+        /// be true only when the dragged panel can actually land in a side zone
+        /// — for pinned-center panels (graphs) the side zones are off-limits, so
+        /// uncovering them just adds noise and is skipped.</summary>
+        public void BeginDrag(bool exposeEmptySideZones)
         {
             if (dragActive) return;
             dragActive = true;
-            // Uncollapse all side splits unconditionally; only ones whose pane
-            // was actually collapsed will visibly change. Tag empty zones.
-            outerSplit?.UnCollapse();
-            midRowSplit?.UnCollapse();
-            centerColSplit?.UnCollapse();
-            foreach (var z in AllZones())
+            if (exposeEmptySideZones)
             {
-                if (z.Kind == DockZoneKind.Center) continue;
-                if (IsZoneEmpty(z)) z.AddToClassList("nt-dock-zone--ghost");
+                // Uncollapse all side splits unconditionally; only ones whose
+                // pane was actually collapsed will visibly change. Tag empty
+                // zones so they render as ghost placeholders.
+                outerSplit?.UnCollapse();
+                midRowSplit?.UnCollapse();
+                centerColSplit?.UnCollapse();
+                foreach (var z in AllZones())
+                {
+                    if (z.Kind == DockZoneKind.Center) continue;
+                    if (IsZoneEmpty(z)) z.AddToClassList("nt-dock-zone--ghost");
+                }
             }
             SuppressDragLineCursors();
         }
