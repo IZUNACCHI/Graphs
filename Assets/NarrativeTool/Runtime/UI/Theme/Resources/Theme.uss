@@ -2153,7 +2153,7 @@
     flex-grow: 1;
 }
 /* Match the old graph-tab look (`.nt-tab-btn`) on top of native TabView. */
-.nt-dock-area > .unity-tab-view__header-container {
+.nt-dock-area .unity-tab-view__header-container {
     background-color: #181818;
     border-bottom-width: 1px;
     border-bottom-color: #2a2a2a;
@@ -2201,7 +2201,7 @@
     font-size: 10px;
 }
 /* Content area background flush with the active tab. */
-.nt-dock-area > .unity-tab-view__content-container {
+.nt-dock-area .unity-tab-view__content-container {
     background-color: #1e1e1e;
 }
 .nt-dock-tab {

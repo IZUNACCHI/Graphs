@@ -10,12 +10,17 @@ namespace NarrativeTool.UI.Docking
     /// </summary>
     public sealed class DockArea : DockNode
     {
+        // Wrapper container so placeholder + tabView can be siblings. Adding
+        // anything other than a Tab as a child of TabView crashes Unity 6.0.3
+        // (TabView.OnElementAdded does an Insert(1,…) into its header
+        // container, which throws when the receiver has < 1 children).
+        private readonly VisualElement element;
         private readonly TabView tabView;
         private readonly List<IDockablePanel> panels = new();
         private readonly Dictionary<string, Tab> tabsById = new();
-        private Label placeholder;
+        private readonly Label placeholder;
 
-        public override VisualElement Element => tabView;
+        public override VisualElement Element => element;
         public TabView TabView => tabView;
         public IReadOnlyList<IDockablePanel> Panels => panels;
 
@@ -27,12 +32,18 @@ namespace NarrativeTool.UI.Docking
 
         public DockArea()
         {
-            tabView = new TabView();
-            tabView.AddToClassList("nt-dock-area");
-            tabView.style.flexGrow = 1;
+            element = new VisualElement();
+            element.AddToClassList("nt-dock-area");
+            element.style.flexGrow = 1;
+            element.style.flexDirection = FlexDirection.Column;
 
-            // Placeholder shown when no panels are docked here. Text is
-            // selected lazily based on Zone kind (see RefreshPlaceholder).
+            tabView = new TabView();
+            tabView.AddToClassList("nt-dock-area__tabs");
+            tabView.style.flexGrow = 1;
+            element.Add(tabView);
+
+            // Placeholder is a SIBLING of the TabView (inside our wrapper),
+            // NOT a child of TabView — TabView only tolerates Tab children.
             placeholder = new Label("");
             placeholder.AddToClassList("nt-dock-area__placeholder");
             placeholder.pickingMode = PickingMode.Ignore;
@@ -41,7 +52,7 @@ namespace NarrativeTool.UI.Docking
             placeholder.style.top = 0;  placeholder.style.bottom = 0;
             placeholder.style.unityTextAlign = TextAnchor.MiddleCenter;
             placeholder.style.display = DisplayStyle.None;
-            tabView.Add(placeholder);
+            element.Add(placeholder);
         }
 
         public bool HasPanel(string id) => tabsById.ContainsKey(id);
@@ -62,12 +73,19 @@ namespace NarrativeTool.UI.Docking
             var tab = new Tab(p.Title);
             tab.AddToClassList("nt-dock-tab");
             tab.userData = p; // used by serializer & drag manager
-            // Re-parent panel content into the tab.
+
+            // Order matters in Unity 6.0.3: tabView.Add(tab) MUST happen
+            // before tab.Add(p.Content). A Tab's contentContainer routes Adds
+            // through the TabView's content-viewport machinery, which is only
+            // initialised once the Tab is parented. Calling tab.Add(content)
+            // on an unparented Tab throws "Index out of range: 1" deep inside
+            // TabView.OnElementAdded.
+            tabView.Add(tab);
+
             p.Content.RemoveFromHierarchy();
             p.Content.style.flexGrow = 1;
             tab.Add(p.Content);
 
-            tabView.Add(tab);
             panels.Add(p);
             tabsById[p.Id] = tab;
 

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"/c/Program Files/Unity/Hub/Editor/6000.3.11f1/Editor/Unity.exe\" -batchmode -nographics -quit -projectPath \"C:\\\\Users\\\\Afonso\\\\DEV\\\\Unity\\\\Graphs\\\\Assets\\\\NarrativeTool\\\\.claude\\\\worktrees\\\\great-ritchie-dd09e5\" -logFile -)"
+    ]
+  }
+}
