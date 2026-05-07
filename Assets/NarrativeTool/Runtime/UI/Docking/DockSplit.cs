@@ -51,11 +51,47 @@ namespace NarrativeTool.UI.Docking
         }
 
         /// <summary>Replaces one of the two children. Used when a sub-tree is
-        /// rewritten (e.g. an empty area being collapsed away).</summary>
+        /// rewritten (e.g. an empty area being collapsed away, or a leaf being
+        /// upgraded to a sub-split).
+        /// <para>
+        /// Implementation note: we do NOT route through <see cref="SetChildren"/>
+        /// because in some scenarios (notably split-while-already-inside-a-split)
+        /// the new child has already been re-parented to live inside oldChild's
+        /// soon-to-be position. SetChildren's blanket
+        /// <c>oldChild.Element.RemoveFromHierarchy()</c> would tear that down.
+        /// Instead we do a surgical slot swap and only touch the visual tree
+        /// where it's still consistent with our data model.
+        /// </para>
+        /// </summary>
         public void ReplaceChild(DockNode oldChild, DockNode newChild)
         {
-            if (first == oldChild)       SetChildren(newChild, second);
-            else if (second == oldChild) SetChildren(first, newChild);
+            int slot;
+            if (first == oldChild) slot = 0;
+            else if (second == oldChild) slot = 1;
+            else return;
+
+            // Detach oldChild's element only if it is still under our splitView.
+            // If something else has already re-parented it (e.g. into newChild's
+            // own subtree), leave it alone — that other owner is now responsible.
+            if (oldChild?.Element != null && oldChild.Element.parent == splitView)
+                oldChild.Element.RemoveFromHierarchy();
+            // We deliberately don't touch oldChild.Parent — it may already be
+            // pointing at its new owner. The caller manages oldChild's lifecycle.
+
+            if (slot == 0) first = newChild;
+            else           second = newChild;
+
+            if (newChild != null)
+            {
+                newChild.Parent = this;
+                newChild.Zone = Zone;
+                if (newChild.Element != null && newChild.Element.parent != splitView)
+                {
+                    newChild.Element.RemoveFromHierarchy();
+                    if (slot == 0) splitView.Insert(0, newChild.Element);
+                    else           splitView.Add(newChild.Element);
+                }
+            }
         }
 
         /// <summary>Returns the sibling of <paramref name="child"/>, or null.</summary>

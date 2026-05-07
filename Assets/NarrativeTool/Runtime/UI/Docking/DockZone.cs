@@ -90,6 +90,15 @@ namespace NarrativeTool.UI.Docking
                                   float ratio = 0.5f)
         {
             if (targetArea == null || side == DropSide.Center) return null;
+
+            // CRITICAL: capture targetArea's parent BEFORE constructing newSplit.
+            // The DockSplit ctor calls SetChildren which sets targetArea.Parent
+            // to the new split — if we read .Parent afterwards we get the new
+            // split itself, then call newSplit.ReplaceChild(targetArea, newSplit)
+            // which makes newSplit.first = newSplit → infinite recursion in
+            // AssignZoneRecursively / stack overflow.
+            var parent = targetArea.Parent;
+
             var newArea = new DockArea();
             newArea.AddPanel(panel);
 
@@ -109,8 +118,6 @@ namespace NarrativeTool.UI.Docking
             var newSplit = new DockSplit(orientation, first, second,
                 fixedPaneIndex: newOnFirst ? 0 : 1, fixedPaneStartDimension: dim);
 
-            // Replace targetArea in the tree with newSplit.
-            var parent = targetArea.Parent;
             if (parent == null)
             {
                 SetRoot(newSplit);
