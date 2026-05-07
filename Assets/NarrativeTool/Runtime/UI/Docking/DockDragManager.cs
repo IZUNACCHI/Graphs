@@ -281,6 +281,15 @@ namespace NarrativeTool.UI.Docking
                 return;
             }
 
+            // Splitting an empty area would leave one half empty. Force a
+            // Center drop (i.e. just take over the empty area as a tab).
+            if (hoverArea.IsEmpty)
+            {
+                hoverSide = DropSide.Center;
+                overlay.ShowOver(root, hoverArea.Element.worldBound, DropSide.Center);
+                return;
+            }
+
             hoverSide = ComputeSide(hoverArea.Element.worldBound, worldPos);
             overlay.ShowOver(root, hoverArea.Element.worldBound, hoverSide);
         }
