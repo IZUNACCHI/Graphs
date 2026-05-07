@@ -2197,7 +2197,6 @@
     color: #c8c8c8;
 }
 .nt-dock-area .unity-tab__header-label {
-    color: inherit;
     font-size: 10px;
 }
 /* Content area background flush with the active tab. */
@@ -2224,7 +2223,6 @@
     background-color: rgba(74, 154, 106, 0.06);
     min-width: 80px;
     min-height: 60px;
-    border-style: dashed;
     border-width: 1px;
     border-color: rgba(74, 154, 106, 0.4);
 }
