@@ -2156,6 +2156,18 @@
 }
 .nt-dock-area {
     flex-grow: 1;
+    /* Mirror the zone min so user-created splits inside a zone also clamp
+       — TwoPaneSplitView reads resolvedStyle.minWidth/minHeight on both
+       its fixed and flex panes when clamping splitter drag. */
+    min-width: 80px;
+    min-height: 60px;
+}
+.nt-dock-split {
+    /* Same: when a DockSplit (TwoPaneSplitView) is itself a flex pane of
+       another split, its min is what stops the parent splitter from
+       crushing it to zero. */
+    min-width: 80px;
+    min-height: 60px;
 }
 /* Match the old graph-tab look (`.nt-tab-btn`) on top of native TabView. */
 .nt-dock-area .unity-tab-view__header-container {
