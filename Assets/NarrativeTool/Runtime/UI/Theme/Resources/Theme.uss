@@ -2200,9 +2200,15 @@
     color: inherit;
     font-size: 10px;
 }
-/* Content area background flush with the active tab. */
+/* TabView's built-in content viewport is hidden — DockArea uses its own
+   `.nt-dock-area__content` host instead, because Unity 6.0.3's Tab.Add()
+   routes content into TabView machinery that's opaque and unreliable. */
 .nt-dock-area .unity-tab-view__content-container {
+    display: none;
+}
+.nt-dock-area__content {
     background-color: #1e1e1e;
+    flex-grow: 1;
 }
 .nt-dock-tab {
     flex-grow: 1;
