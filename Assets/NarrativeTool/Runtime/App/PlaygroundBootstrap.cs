@@ -40,9 +40,9 @@ namespace NarrativeTool.App
         // ── Editor / canvas ──
         private VisualElement root;
         private MainWindow mainWindow;
-        private GraphTabManager tabManager;          // alias of mainWindow.TabManager
-        private RuntimePanel runtimePanel;           // alias of mainWindow.RuntimePanel
-        private DebuggerPanel debuggerPanel;         // alias of mainWindow.DebuggerPanel
+        private GraphCenterController centerController;  // alias of mainWindow.CenterController
+        private RuntimePanel runtimePanel;                // alias of mainWindow.RuntimePanel
+        private DebuggerPanel debuggerPanel;              // alias of mainWindow.DebuggerPanel
 
         // ── Runtime ──
         private RuntimeEngine runtimeEngine;
@@ -153,7 +153,7 @@ namespace NarrativeTool.App
             StopRuntime();
             mainWindow?.Teardown();
             mainWindow = null;
-            tabManager = null;
+            centerController = null;
             runtimePanel = null;
             debuggerPanel = null;
         }
@@ -200,7 +200,7 @@ namespace NarrativeTool.App
             mainWindow = new MainWindow(project, session, contextMenu, new MainWindowCallbacks
             {
                 OnBackToLibrary = ShowLibrary,
-                OnSave          = () => { mainWindow?.TabManager?.SaveActiveTab(); SaveCurrent(); },
+                OnSave          = () => { mainWindow?.CenterController?.SaveActiveTab(); SaveCurrent(); },
                 OnSaveAll       = SaveAll,
                 OnPlayProject   = () => StartRuntime(),  // TODO: distinguish project-vs-graph entry point
                 OnPlayGraph     = () => StartRuntime(),
@@ -213,19 +213,14 @@ namespace NarrativeTool.App
             root.Add(mainWindow);
 
             // Aliases keep StartRuntime/StopRuntime/etc. unchanged.
-            tabManager    = mainWindow.TabManager;
-            runtimePanel  = mainWindow.RuntimePanel;
-            debuggerPanel = mainWindow.DebuggerPanel;
+            centerController = mainWindow.CenterController;
+            runtimePanel     = mainWindow.RuntimePanel;
+            debuggerPanel    = mainWindow.DebuggerPanel;
         }
 
         private void SaveAll()
         {
-            if (mainWindow?.TabManager != null)
-            {
-                // Save every open dirty tab.
-                foreach (var t in mainWindow.TabManager.AllTabs)
-                    if (t.IsDirty) t.Save();
-            }
+            mainWindow?.CenterController?.SaveAllTabs();
             SaveCurrent();
         }
 
@@ -236,22 +231,22 @@ namespace NarrativeTool.App
             if (runtimeEngine != null && runtimeEngine.State != RuntimeState.Idle && runtimeEngine.State != RuntimeState.Done)
                 return;
 
-            GraphTab targetTab = tabManager?.ActiveTab;
+            GraphPanel targetPanel = centerController?.ActivePanel;
 
-            if (targetTab == null)
+            if (targetPanel == null)
             {
                 var firstLazy = session.Project?.Graphs.Items.FirstOrDefault();
                 if (firstLazy != null)
-                    targetTab = tabManager.OpenGraph(firstLazy);
+                    targetPanel = centerController?.OpenGraph(firstLazy);
             }
 
-            if (targetTab == null)
+            if (targetPanel == null)
             {
                 Debug.LogWarning("[Bootstrap] No graph is open. Double‑click a graph to open it, then press Run.");
                 return;
             }
 
-            string graphId = targetTab.Lazy.Id;   // ← use the stable ID from Lazy
+            string graphId = targetPanel.Lazy.Id;   // ← use the stable ID from Lazy
 
             if (string.IsNullOrEmpty(graphId))
             {

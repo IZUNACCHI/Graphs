@@ -36,6 +36,48 @@ namespace NarrativeTool.UI.Docking
             style.display = DisplayStyle.Flex;
         }
 
+        /// <summary>Renders the overlay as a thin vertical insertion bar
+        /// between two tab headers — used when the drag is over a header
+        /// strip and the drop is interpreted as a reorder.</summary>
+        public void ShowReorderBar(VisualElement host, DockArea area, int insertIndex)
+        {
+            const float BarWidth = 3f;
+            var hc = area.HeaderContainer;
+            if (hc == null) { Hide(); return; }
+
+            float x;
+            float y = hc.worldBound.y;
+            float h = hc.worldBound.height;
+
+            if (hc.childCount == 0)
+            {
+                x = hc.worldBound.x;
+            }
+            else if (insertIndex <= 0)
+            {
+                x = hc[0].worldBound.x - BarWidth * 0.5f;
+            }
+            else if (insertIndex >= hc.childCount)
+            {
+                var last = hc[hc.childCount - 1];
+                x = last.worldBound.xMax - BarWidth * 0.5f;
+            }
+            else
+            {
+                var prev = hc[insertIndex - 1];
+                var next = hc[insertIndex];
+                float gapCenter = (prev.worldBound.xMax + next.worldBound.x) * 0.5f;
+                x = gapCenter - BarWidth * 0.5f;
+            }
+
+            Vector2 topLeft = host.WorldToLocal(new Vector2(x, y));
+            style.left = topLeft.x;
+            style.top = topLeft.y;
+            style.width = BarWidth;
+            style.height = h;
+            style.display = DisplayStyle.Flex;
+        }
+
         public void Hide() => style.display = DisplayStyle.None;
 
         private static Rect ComputeDropRect(Rect a, DropSide side) => side switch

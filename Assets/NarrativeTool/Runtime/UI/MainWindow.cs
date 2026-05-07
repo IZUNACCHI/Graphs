@@ -51,7 +51,7 @@ namespace NarrativeTool.UI
         public GraphsPanel    GraphsPanelView    { get; private set; }
         public VariablesPanel VariablesPanelView { get; private set; }
         public EntitiesPanel  EntitiesPanelView  { get; private set; }
-        public GraphTabManager TabManager { get; private set; }
+        public GraphCenterController CenterController { get; private set; }
         public RuntimePanel RuntimePanel  { get; private set; }
         public DebuggerPanel DebuggerPanel { get; private set; }
 
@@ -245,15 +245,6 @@ namespace NarrativeTool.UI
             VariablesPanelView.Bind(project, session, contextMenu);
             EntitiesPanelView.Bind(project, session, contextMenu);
 
-            TabManager = new GraphTabManager(session, contextMenu);
-            TabManager.SubscribeToEvents(session.Bus);
-            TabManager.style.flexGrow = 1;
-
-            var firstGraphLazy = project?.Graphs.Items.FirstOrDefault();
-            if (firstGraphLazy != null)
-                TabManager.OpenGraph(firstGraphLazy);
-            GraphsPanelView.OnGraphDoubleClicked += lazy => TabManager.OpenGraph(lazy);
-
             RuntimePanel  = new RuntimePanel();
             RuntimePanel.style.display  = DisplayStyle.None;
             DebuggerPanel = new DebuggerPanel();
@@ -264,11 +255,6 @@ namespace NarrativeTool.UI
         {
             Dock = new DockRoot();
             Add(Dock);
-
-            // Phase 2a hosts GraphTabManager as the center zone's raw content;
-            // Phase 2c will turn each open graph into an IDockablePanel inside the
-            // center DockArea so graphs can be split/dragged like other panels.
-            Dock.Center.SetCustomContent(TabManager);
 
             // Try to restore a saved layout; if none, fall back to defaults.
             if (!DockLayoutSerializer.Load(Dock))
@@ -283,6 +269,28 @@ namespace NarrativeTool.UI
 
             // Drag-drop wiring (after panels are mounted so initial scan picks them up).
             dragManager = new DockDragManager(Dock);
+
+            // Center controller drives graph-panel lifecycle on the real DockArea.
+            CenterController = new GraphCenterController(Dock, session, contextMenu);
+            CenterController.SubscribeToEvents(session.Bus);
+            CenterController.OnCenterEmpty += () => EnsurePanelOpen("graphs");
+            GraphsPanelView.OnGraphDoubleClicked += lazy => CenterController.OpenGraph(lazy);
+
+            // Open the first graph automatically (preserves prior bootstrap UX).
+            var firstGraphLazy = project?.Graphs.Items.FirstOrDefault();
+            if (firstGraphLazy != null) CenterController.OpenGraph(firstGraphLazy);
+        }
+
+        /// <summary>Opens a panel by id if it isn't currently docked. Used by
+        /// <see cref="GraphCenterController"/> when the last graph closes — we
+        /// re-open the Graphs sidebar so the user can find their way back.</summary>
+        public void EnsurePanelOpen(string id)
+        {
+            if (Dock == null || string.IsNullOrEmpty(id)) return;
+            if (Dock.IsOpen(id)) return;
+            var d = DockRegistry.Find(id);
+            if (d?.Factory == null) return;
+            Dock.OpenPanel(d.Factory(), d.DefaultZone);
         }
 
         private void RegisterPanelDescriptors()
@@ -334,7 +342,7 @@ namespace NarrativeTool.UI
             // Persist current layout before tearing down (per-user, global).
             if (Dock != null) DockLayoutSerializer.Save(Dock);
 
-            TabManager?.UnsubscribeEvents();
+            CenterController?.UnsubscribeEvents();
             ToolbarRegistry.Clear();
             MenuBarRegistry.Clear();
             DockRegistry.Clear();
