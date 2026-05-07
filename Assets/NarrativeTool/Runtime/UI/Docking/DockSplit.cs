@@ -97,5 +97,16 @@ namespace NarrativeTool.UI.Docking
         /// <summary>Returns the sibling of <paramref name="child"/>, or null.</summary>
         public DockNode Sibling(DockNode child)
             => child == first ? second : (child == second ? first : null);
+
+        /// <summary>
+        /// Re-applies the fixed-pane initial dimension. Used by
+        /// <see cref="DockZone.SplitArea"/> when the target area's layout wasn't
+        /// measured at split time — the split is built with a fallback size and
+        /// this setter is invoked once the real geometry is known.
+        /// </summary>
+        public void SetFixedPaneInitialDimension(float dim)
+        {
+            if (dim > 0) splitView.fixedPaneInitialDimension = dim;
+        }
     }
 }

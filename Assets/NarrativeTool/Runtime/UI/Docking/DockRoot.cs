@@ -140,10 +140,50 @@ namespace NarrativeTool.UI.Docking
         private static bool IsZoneEmpty(DockZone zone)
         {
             if (zone == null) return true;
-            if (zone.Root == null) return false;       // custom-content zone (Center) is never empty
+            // The center zone keeps an empty DockArea so the placeholder hint
+            // can render — but for collapse purposes we still report true if
+            // it has no panels. RefreshZoneVisibility never collapses Center
+            // anyway, so this only affects the drag-driven ghost styling.
+            if (zone.Root == null) return true;
             foreach (var area in zone.AllAreas())
                 if (!area.IsEmpty) return false;
             return true;
+        }
+
+        // ────────────── Drag-driven empty-zone exposure (Issue 2) ──────────────
+        //
+        // While a tab drag is active, every empty side zone is uncollapsed and
+        // tagged with `nt-dock-zone--ghost` so it appears as a faint placeholder
+        // strip and can accept a drop. On drag end, any zone that's still empty
+        // is re-collapsed and the ghost class is removed.
+
+        private bool dragActive;
+
+        public void BeginDrag()
+        {
+            if (dragActive) return;
+            dragActive = true;
+            // Uncollapse all side splits unconditionally; only ones whose pane
+            // was actually collapsed will visibly change. Tag empty zones.
+            outerSplit?.UnCollapse();
+            midRowSplit?.UnCollapse();
+            centerColSplit?.UnCollapse();
+            foreach (var z in AllZones())
+            {
+                if (z.Kind == DockZoneKind.Center) continue;
+                if (IsZoneEmpty(z)) z.AddToClassList("nt-dock-zone--ghost");
+            }
+            SuppressDragLineCursors();
+        }
+
+        public void EndDrag()
+        {
+            if (!dragActive) return;
+            dragActive = false;
+            foreach (var z in AllZones())
+                z.RemoveFromClassList("nt-dock-zone--ghost");
+            // Collapse anything that's still empty.
+            RefreshZoneVisibility();
         }
 
         public DockZone GetZone(DockZoneKind kind) => kind switch
@@ -245,6 +285,37 @@ namespace NarrativeTool.UI.Docking
             // Collapse the source area if it became empty.
             if (sourceArea.IsEmpty) sourceArea.Zone?.CollapseArea(sourceArea);
             RefreshZoneVisibility();
+            return true;
+        }
+
+        /// <summary>Reorder a panel inside an area, or move it to a different
+        /// area's tab strip at a specific index (drag-onto-header behaviour).
+        /// Pinned-center constraints still apply.</summary>
+        public bool ReorderTab(string panelId, DockArea targetArea, int targetIndex)
+        {
+            if (string.IsNullOrEmpty(panelId) || targetArea == null) return false;
+            var sourceArea = FindArea(panelId);
+            if (sourceArea == null) return false;
+
+            var panel = sourceArea.GetPanel(panelId);
+            if (panel == null) return false;
+
+            var targetZone = targetArea.Zone;
+            if (panel.IsPinnedCenter && targetZone.Kind != DockZoneKind.Center) return false;
+            if (!panel.IsPinnedCenter && targetZone.Kind == DockZoneKind.Center) return false;
+
+            if (sourceArea == targetArea)
+            {
+                targetArea.MoveTabToIndex(panelId, targetIndex);
+            }
+            else
+            {
+                sourceArea.DetachPanel(panelId);
+                targetArea.AddPanel(panel);
+                targetArea.MoveTabToIndex(panelId, targetIndex);
+                if (sourceArea.IsEmpty) sourceArea.Zone?.CollapseArea(sourceArea);
+                RefreshZoneVisibility();
+            }
             return true;
         }
     }

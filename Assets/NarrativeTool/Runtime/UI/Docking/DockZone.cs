@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace NarrativeTool.UI.Docking
@@ -30,19 +31,6 @@ namespace NarrativeTool.UI.Docking
 
             // Start with an empty area so the zone has something to render.
             SetRoot(new DockArea());
-        }
-
-        /// <summary>
-        /// Replaces the dock-tree with raw content. Used (Phase 2a) to host
-        /// <c>GraphTabManager</c> in the center zone before it is migrated into a
-        /// real <see cref="DockArea"/> in Phase 2c. While in custom-content mode
-        /// the zone has no <see cref="Root"/> and panels cannot be added here.
-        /// </summary>
-        public void SetCustomContent(VisualElement content)
-        {
-            Clear();
-            root = null;
-            if (content != null) Add(content);
         }
 
         public void SetRoot(DockNode node)
@@ -109,14 +97,54 @@ namespace NarrativeTool.UI.Docking
             var first  = newOnFirst ? (DockNode)newArea : targetArea;
             var second = newOnFirst ? (DockNode)targetArea : newArea;
 
-            // Approximate fixed-pane size from the zone's current dimensions
-            float dim = orientation == DockOrientation.Horizontal
-                ? Mathf01(resolvedStyle.width)  * ratio
-                : Mathf01(resolvedStyle.height) * ratio;
-            if (dim <= 0) dim = 200;
+            // Approximate fixed-pane size from the *target area's* current
+            // dimensions, NOT the zone's. Reading the zone causes deep nested
+            // splits to size as if they fill the whole zone, which squeezes
+            // intermediate panes off-screen.
+            var targetLayout = targetArea.Element.layout;
+            float available = orientation == DockOrientation.Horizontal
+                ? targetLayout.width
+                : targetLayout.height;
+
+            const float MinPaneSize = 80f;
+            float dim;
+            bool layoutWasReady = available > 0;
+            if (layoutWasReady)
+            {
+                dim = Mathf.Max(MinPaneSize, available * ratio);
+                // Don't ever exceed the available space minus a minimum for
+                // the other pane.
+                dim = Mathf.Min(dim, Mathf.Max(MinPaneSize, available - MinPaneSize));
+            }
+            else
+            {
+                // Fallback if Unity hasn't measured this leaf yet (common when
+                // the user splits twice in quick succession). Re-applied on
+                // the first GeometryChangedEvent below.
+                dim = 200f;
+            }
 
             var newSplit = new DockSplit(orientation, first, second,
                 fixedPaneIndex: newOnFirst ? 0 : 1, fixedPaneStartDimension: dim);
+
+            // If layout wasn't ready, fix the size up once geometry settles.
+            if (!layoutWasReady)
+            {
+                EventCallback<GeometryChangedEvent> onGeom = null;
+                onGeom = (GeometryChangedEvent evt) =>
+                {
+                    var l = targetArea.Element.layout;
+                    float a = orientation == DockOrientation.Horizontal ? l.width : l.height;
+                    if (a > 0)
+                    {
+                        float newDim = Mathf.Max(MinPaneSize, a * ratio);
+                        newDim = Mathf.Min(newDim, Mathf.Max(MinPaneSize, a - MinPaneSize));
+                        newSplit.SetFixedPaneInitialDimension(newDim);
+                        newSplit.Element.UnregisterCallback<GeometryChangedEvent>(onGeom);
+                    }
+                };
+                newSplit.Element.RegisterCallback<GeometryChangedEvent>(onGeom);
+            }
 
             if (parent == null)
             {

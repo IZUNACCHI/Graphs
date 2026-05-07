@@ -2218,3 +2218,36 @@
     border-width: 1px;
     border-radius: 2px;
 }
+
+/* Ghost placeholder shown on empty side zones during a drag (Issue 2). */
+.nt-dock-zone--ghost {
+    background-color: rgba(74, 154, 106, 0.06);
+    min-width: 80px;
+    min-height: 60px;
+    border-style: dashed;
+    border-width: 1px;
+    border-color: rgba(74, 154, 106, 0.4);
+}
+
+/* Placeholder text shown inside an empty DockArea (Issue 1). */
+.nt-dock-area__placeholder {
+    color: rgba(180, 180, 180, 0.45);
+    font-size: 11px;
+    -unity-font-style: italic;
+}
+
+/* Close X on each tab header. */
+.nt-dock-tab__close {
+    color: rgba(170, 170, 170, 0.5);
+    font-size: 14px;
+    margin-left: 6px;
+    margin-right: -2px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 2px;
+    -unity-text-align: middle-center;
+}
+.nt-dock-tab__close:hover {
+    color: rgb(230, 100, 100);
+    background-color: rgba(255, 255, 255, 0.06);
+}

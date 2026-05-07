@@ -47,6 +47,8 @@ namespace NarrativeTool.UI.Docking
         private Vector2 startPos;
         private DockArea hoverArea;
         private DropSide hoverSide;
+        private bool hoverIsReorder;     // cursor is over a tab header strip
+        private int hoverReorderIndex;   // insertion index for reorder
         private int activePointerId = -1;
 
         public DockDragManager(DockRoot root)
@@ -169,6 +171,8 @@ namespace NarrativeTool.UI.Docking
                 // Now the user is committed; capture so we keep getting move/up
                 // even if the cursor leaves the source area.
                 root.CapturePointer(activePointerId);
+                // Expose empty side zones so they become drop-targetable.
+                root.BeginDrag();
             }
 
             UpdateHover(e.position);
@@ -190,6 +194,10 @@ namespace NarrativeTool.UI.Docking
         {
             if (activePointerId >= 0 && root.HasPointerCapture(activePointerId))
                 root.ReleasePointer(activePointerId);
+
+            // Always pair with BeginDrag — re-collapses any zone that's still
+            // empty after the drop and removes the ghost styling.
+            root.EndDrag();
 
             armed = false;
             dragging = false;
@@ -222,6 +230,11 @@ namespace NarrativeTool.UI.Docking
             tab = null; area = null; panel = null;
             if (target == null) return false;
 
+            // Don't arm a drag if the click is on a tab's close X — let it
+            // bubble down to the close handler that actually closes the tab.
+            for (var c = target; c != null; c = c.parent)
+                if (c.ClassListContains(DockArea.CloseButtonClass)) return false;
+
             VisualElement headerEl = null;
             for (var cur = target; cur != null; cur = cur.parent)
             {
@@ -253,7 +266,21 @@ namespace NarrativeTool.UI.Docking
         private void UpdateHover(Vector2 worldPos)
         {
             hoverArea = HitTestArea(worldPos);
+            hoverIsReorder = false;
+            hoverReorderIndex = -1;
             if (hoverArea == null) { overlay.Hide(); return; }
+
+            // If the cursor is over the target's header strip, treat the drop
+            // as a reorder/insert-into-tabs rather than split/merge.
+            int reorderIdx = hoverArea.IndexOfHeaderAt(worldPos);
+            if (reorderIdx >= 0)
+            {
+                hoverIsReorder = true;
+                hoverReorderIndex = reorderIdx;
+                overlay.ShowReorderBar(root, hoverArea, reorderIdx);
+                return;
+            }
+
             hoverSide = ComputeSide(hoverArea.Element.worldBound, worldPos);
             overlay.ShowOver(root, hoverArea.Element.worldBound, hoverSide);
         }
@@ -286,7 +313,10 @@ namespace NarrativeTool.UI.Docking
         private void Commit(Vector2 worldPos)
         {
             if (hoverArea == null || draggedPanel == null) return;
-            root.MoveTab(draggedPanel.Id, hoverArea, hoverSide);
+            if (hoverIsReorder)
+                root.ReorderTab(draggedPanel.Id, hoverArea, hoverReorderIndex);
+            else
+                root.MoveTab(draggedPanel.Id, hoverArea, hoverSide);
         }
     }
 }
