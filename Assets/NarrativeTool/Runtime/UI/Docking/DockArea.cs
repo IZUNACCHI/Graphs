@@ -6,19 +6,28 @@ using UnityEngine.UIElements;
 namespace NarrativeTool.UI.Docking
 {
     /// <summary>
-    /// Leaf dock node: a TabView holding one Tab per docked panel.
+    /// Leaf dock node: a TabView (used solely as a tab-header strip) plus a
+    /// content host that we manage ourselves.
+    /// <para>
+    /// Unity 6.0.3's <c>TabView</c> is opaque about where Tab content actually
+    /// lives — calling <c>tab.Add(content)</c> routes through internal
+    /// content-viewport machinery that either crashes (when the Tab isn't yet
+    /// parented) or silently parks the content somewhere it isn't rendered.
+    /// We sidestep that entirely: <c>Tab</c> objects only ever exist for their
+    /// header. The actual panel <c>Content</c> goes into our own
+    /// <c>contentHost</c> sibling element, with display toggled to match the
+    /// active tab. This also makes split / reorder / detach trivial since
+    /// content is just a regular child of contentHost.
+    /// </para>
     /// </summary>
     public sealed class DockArea : DockNode
     {
-        // Wrapper container so placeholder + tabView can be siblings. Adding
-        // anything other than a Tab as a child of TabView crashes Unity 6.0.3
-        // (TabView.OnElementAdded does an Insert(1,…) into its header
-        // container, which throws when the receiver has < 1 children).
-        private readonly VisualElement element;
-        private readonly TabView tabView;
+        private readonly VisualElement element;       // wrapper
+        private readonly TabView tabView;             // header strip only
+        private readonly VisualElement contentHost;   // hosts panel content
+        private readonly Label placeholder;           // overlay for empty areas
         private readonly List<IDockablePanel> panels = new();
         private readonly Dictionary<string, Tab> tabsById = new();
-        private readonly Label placeholder;
 
         public override VisualElement Element => element;
         public TabView TabView => tabView;
@@ -37,13 +46,21 @@ namespace NarrativeTool.UI.Docking
             element.style.flexGrow = 1;
             element.style.flexDirection = FlexDirection.Column;
 
+            // TabView purely renders the header strip; content goes in our
+            // contentHost below. flexGrow=0 so it doesn't try to take vertical
+            // space — the height is driven by the header.
             tabView = new TabView();
             tabView.AddToClassList("nt-dock-area__tabs");
-            tabView.style.flexGrow = 1;
+            tabView.style.flexGrow = 0;
+            tabView.style.flexShrink = 0;
             element.Add(tabView);
 
-            // Placeholder is a SIBLING of the TabView (inside our wrapper),
-            // NOT a child of TabView — TabView only tolerates Tab children.
+            contentHost = new VisualElement();
+            contentHost.AddToClassList("nt-dock-area__content");
+            contentHost.style.flexGrow = 1;
+            contentHost.style.flexDirection = FlexDirection.Column;
+            element.Add(contentHost);
+
             placeholder = new Label("");
             placeholder.AddToClassList("nt-dock-area__placeholder");
             placeholder.pickingMode = PickingMode.Ignore;
@@ -53,6 +70,9 @@ namespace NarrativeTool.UI.Docking
             placeholder.style.unityTextAlign = TextAnchor.MiddleCenter;
             placeholder.style.display = DisplayStyle.None;
             element.Add(placeholder);
+
+            // Swap visible content when the user clicks a different tab.
+            tabView.activeTabChanged += OnActiveTabChanged;
         }
 
         public bool HasPanel(string id) => tabsById.ContainsKey(id);
@@ -72,34 +92,28 @@ namespace NarrativeTool.UI.Docking
 
             var tab = new Tab(p.Title);
             tab.AddToClassList("nt-dock-tab");
-            tab.userData = p; // used by serializer & drag manager
-
-            // Order matters in Unity 6.0.3: tabView.Add(tab) MUST happen
-            // before tab.Add(p.Content). A Tab's contentContainer routes Adds
-            // through the TabView's content-viewport machinery, which is only
-            // initialised once the Tab is parented. Calling tab.Add(content)
-            // on an unparented Tab throws "Index out of range: 1" deep inside
-            // TabView.OnElementAdded.
+            tab.userData = p;
+            // Tab is parented to TabView. We deliberately don't call tab.Add(...)
+            // — Tab content lives in our own contentHost.
             tabView.Add(tab);
 
+            // Mount panel content in our content host. Visibility is driven by
+            // active-tab state (see UpdateActiveContent).
             p.Content.RemoveFromHierarchy();
             p.Content.style.flexGrow = 1;
-            tab.Add(p.Content);
+            contentHost.Add(p.Content);
 
             panels.Add(p);
             tabsById[p.Id] = tab;
 
-            // In Unity 6.0.3 the Tab's header element is reparented OUT of the
-            // Tab and into the TabView's `unity-tab-view__header-container`,
-            // so a header click cannot reach the owning Tab via the parent
-            // chain. Tag the just-created header element with our own marker
-            // class + userData so the drag manager can identify which panel
-            // a header click belongs to.
+            // Header is reparented out of Tab into TabView's header-container
+            // post-construction; tag it on the next tick so drag detection /
+            // close button / reorder all work.
             int headerIndex = panels.Count - 1;
             tabView.schedule.Execute(() => MarkHeader(headerIndex, p)).ExecuteLater(0);
 
+            UpdateActiveContent();
             RefreshPlaceholder();
-            // Notify root (drag manager etc.).
             Zone?.Owner?.RaiseTabAdded(this, tab, p);
         }
 
@@ -119,7 +133,6 @@ namespace NarrativeTool.UI.Docking
             header.AddToClassList(HeaderMarkerClass);
             header.userData = p;
 
-            // Append a close X if the panel allows it.
             if (p.IsCloseable && header.Q(className: CloseButtonClass) == null)
             {
                 var closeBtn = new Label("×");
@@ -143,12 +156,13 @@ namespace NarrativeTool.UI.Docking
         {
             if (!tabsById.TryGetValue(id, out var tab)) return null;
             var panel = panels.Find(p => p.Id == id);
-            // Remove tab from TabView; detach content so it can be re-parented.
+
             tabView.Remove(tab);
             panel?.Content.RemoveFromHierarchy();
             tabsById.Remove(id);
             panels.RemoveAll(p => p.Id == id);
 
+            UpdateActiveContent();
             RefreshPlaceholder();
             if (panel != null) PanelClosed?.Invoke(panel);
             return panel;
@@ -160,6 +174,7 @@ namespace NarrativeTool.UI.Docking
         {
             if (!tabsById.TryGetValue(id, out var tab)) return;
             tabView.activeTab = tab;
+            UpdateActiveContent();
         }
 
         /// <summary>Updates the visible label of an existing tab. Used when the
@@ -172,11 +187,6 @@ namespace NarrativeTool.UI.Docking
 
         // ────────────── Tab reorder support (Issue 1) ──────────────
 
-        /// <summary>Returns the index of the tab header under
-        /// <paramref name="worldPos"/>, or -1 if the cursor isn't over the
-        /// header strip. The returned value is the *insertion index* — drop
-        /// at this index to land left of the existing tab; drop at
-        /// childCount to land at the end.</summary>
         public int IndexOfHeaderAt(Vector2 worldPos)
         {
             var hc = HeaderContainer;
@@ -187,46 +197,32 @@ namespace NarrativeTool.UI.Docking
             {
                 var h = hc[i];
                 var b = h.worldBound;
-                // If pointer is in the LEFT half of header i, insert at i.
-                // If in the RIGHT half, insert at i+1.
                 float midX = b.x + b.width * 0.5f;
                 if (worldPos.x < midX) return i;
             }
             return hc.childCount;
         }
 
-        /// <summary>Repositions an existing panel's tab to the given slot. Used
-        /// by drag-reorder. <paramref name="targetIndex"/> is the insertion
-        /// index returned by <see cref="IndexOfHeaderAt"/>.</summary>
         public void MoveTabToIndex(string id, int targetIndex)
         {
             if (!tabsById.TryGetValue(id, out var tab)) return;
             int currentIndex = panels.FindIndex(p => p.Id == id);
             if (currentIndex < 0) return;
-            // Adjust insertion index if we're moving the tab past itself.
             if (targetIndex > currentIndex) targetIndex--;
             if (targetIndex < 0) targetIndex = 0;
             if (targetIndex >= panels.Count) targetIndex = panels.Count - 1;
             if (targetIndex == currentIndex) return;
 
-            // Move in the panels list.
             var p = panels[currentIndex];
             panels.RemoveAt(currentIndex);
             panels.Insert(targetIndex, p);
 
-            // Re-order the tab in the TabView (TabView sorts header by
-            // child order). Removing + re-inserting is the safe path here —
-            // TabView doesn't expose a "move" API.
             tabView.Remove(tab);
-            // Pick a tab position that maps to our targetIndex among all
-            // current TabView children (placeholder is the LAST child of
-            // tabView, never a Tab — so direct index works for tabs).
-            // Insert after any tabs at indices < targetIndex.
             tabView.Insert(targetIndex, tab);
 
-            // Re-stamp header markers — header order has changed.
             tabView.schedule.Execute(RemarkAllHeaders).ExecuteLater(0);
             tabView.activeTab = tab;
+            UpdateActiveContent();
         }
 
         private void RemarkAllHeaders()
@@ -238,6 +234,24 @@ namespace NarrativeTool.UI.Docking
                 var h = hc[i];
                 h.AddToClassList(HeaderMarkerClass);
                 h.userData = panels[i];
+            }
+        }
+
+        // ────────────── Active-content management ──────────────
+
+        private void OnActiveTabChanged(Tab prev, Tab cur) => UpdateActiveContent();
+
+        private void UpdateActiveContent()
+        {
+            // Whichever panel matches the active tab is shown; everyone else
+            // is display:None so they don't render or take layout space.
+            var activePanel = tabView.activeTab?.userData as IDockablePanel;
+            if (activePanel == null && panels.Count > 0) activePanel = panels[0];
+            foreach (var p in panels)
+            {
+                p.Content.style.display = (p == activePanel)
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
             }
         }
 
