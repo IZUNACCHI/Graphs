@@ -49,10 +49,22 @@ namespace NarrativeTool.UI.Docking
             Bottom = new DockZone(DockZoneKind.Bottom) { Owner = this };
             Center = new DockZone(DockZoneKind.Center) { Owner = this };
 
+            // The inner SplitViews are flex panes of their parent SplitView.
+            // TwoPaneSplitView clamps the splitter drag against BOTH the
+            // fixed pane's CSS min AND the FLEX pane's CSS min. The DockZone
+            // class brings min-width/min-height for fixed panes (Left / Right
+            // / Bottom), but the flex pane is itself a SplitView with no
+            // class — so without these inline min-sizes the user can drag
+            // the parent splitter all the way over and shrink the flex pane
+            // to zero. Set min-width/height per orientation on each inner
+            // split to a value that comfortably fits everything inside.
+            const float MinSize = 120f; // 80 zone + a little splitter clearance
+
             // center column (center top + bottom).
             centerColSplit = new TwoPaneSplitView(1, 200f, TwoPaneSplitViewOrientation.Vertical);
             centerColSplit.AddToClassList("nt-dock-root__center-col");
             centerColSplit.style.flexGrow = 1;
+            centerColSplit.style.minHeight = MinSize;
             centerColSplit.Add(Center);
             centerColSplit.Add(Bottom);
 
@@ -60,6 +72,7 @@ namespace NarrativeTool.UI.Docking
             midRowSplit = new TwoPaneSplitView(1, 280f, TwoPaneSplitViewOrientation.Horizontal);
             midRowSplit.AddToClassList("nt-dock-root__mid-row");
             midRowSplit.style.flexGrow = 1;
+            midRowSplit.style.minWidth = MinSize;
             midRowSplit.Add(centerColSplit);
             midRowSplit.Add(Right);
 
