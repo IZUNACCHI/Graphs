@@ -76,3 +76,4 @@ crashlytics-build.properties
 /Assets/NarrativeTool/.claude
 *.zip
 .claude/scheduled_tasks.lock
+.claude/
