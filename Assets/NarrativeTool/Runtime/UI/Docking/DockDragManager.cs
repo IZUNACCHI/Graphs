@@ -171,8 +171,12 @@ namespace NarrativeTool.UI.Docking
                 // Now the user is committed; capture so we keep getting move/up
                 // even if the cursor leaves the source area.
                 root.CapturePointer(activePointerId);
-                // Expose empty side zones so they become drop-targetable.
-                root.BeginDrag();
+                // Expose empty side zones so they become drop-targetable —
+                // but only for panels that are allowed to land there. Graph
+                // tabs are pinned to the center, so showing side zones for
+                // them would be misleading noise.
+                bool exposeEmpties = !(draggedPanel?.IsPinnedCenter ?? false);
+                root.BeginDrag(exposeEmpties);
             }
 
             UpdateHover(e.position);

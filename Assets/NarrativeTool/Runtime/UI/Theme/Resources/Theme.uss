@@ -2143,6 +2143,11 @@
     border-color: rgb(42,42,42);
     border-left-width: 1px;
     border-right-width: 1px;
+    /* Minimum so the user can never shrink a zone past where its splitter
+       handle (and any tab inside) is grabbable. TwoPaneSplitView respects
+       these on the flex pane and clamps the splitter accordingly. */
+    min-width: 80px;
+    min-height: 60px;
 }
 .nt-dock-zone--left  { border-left-width: 0; }
 .nt-dock-zone--right { border-right-width: 0; }
