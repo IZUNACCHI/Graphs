@@ -2274,3 +2274,9 @@
     color: rgb(230, 100, 100);
     background-color: rgba(255, 255, 255, 0.06);
 }
+
+/* DebuggerPanel uses its own contentHost; hide TabView's built-in content
+   viewport so it doesn't reserve vertical space below the tab strip. */
+.debugger-panel__tabview .unity-tab-view__content-container {
+    display: none;
+}
